@@ -23,7 +23,21 @@ display: [32][64]bool = .{.{false} ** 64} ** 32,
 /// whether each key 0-F is pressed
 keys: [16]bool = .{false} ** 16,
 
-pub const ExecutionError = error{ IllegalOpcode };
+pub const ExecutionError = error{
+    IllegalOpcode,
+    NotImplemented,
+    StackOverflow,
+};
+
+/// split an opcode into hex digits
+fn split(opcode: u16) [4]u4 {
+    return .{
+        @truncate(u4, opcode >> 12),
+        @truncate(u4, opcode >> 8),
+        @truncate(u4, opcode >> 4),
+        @truncate(u4, opcode >> 0),
+    };
+}
 
 /// a function that executes an instruction and optionally returns the new program counter
 const OpcodeFn = fn (self: *CPU, opcode: u16) ExecutionError!?u12;
@@ -59,8 +73,8 @@ pub fn init(program: []const u8) error{ProgramTooLong}!CPU {
 }
 
 pub fn cycle(self: *CPU) ExecutionError!void {
-    const opcode: u16 = (self.mem[self.pc] << 8) | self.mem[self.pc + 1];
-    const func = msd_opcodes[(opcode & 0xf000) >> 12];
+    const opcode: u16 = (@as(u16, self.mem[self.pc]) << 8) | self.mem[self.pc + 1];
+    const func = msd_opcodes[split(opcode)[0]];
     if (try func(self, opcode)) |new_pc| {
         self.pc = new_pc;
     } else {
@@ -73,48 +87,49 @@ pub fn cycle(self: *CPU) ExecutionError!void {
 fn op00EX(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// 1NNN: jump to NNN
 fn opJump(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// 2NNN: call address NNN
 fn opCall(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// 3XNN: skip next instruction if VX == NN
 fn opSkipEq(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// 4XNN: skip next instruction if VX != NN
 fn opSkipNe(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// 5XY0: skip next instruction if VX == VY
 fn opSkipEqReg(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// 6XNN: set VX to NN
 fn opSetReg(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
+    const reg = split(opcode)[1];
+    const val = @truncate(u8, opcode);
+    self.V[reg] = val;
     return null;
 }
 
@@ -122,49 +137,49 @@ fn opSetReg(self: *CPU, opcode: u16) !?u12 {
 fn opAddNoCarry(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// dispatch an arithmetic instruction beginning with 8
 fn opArithmetic(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// 9XY0: skip next instruction if VX != VY
 fn opSkipNeReg(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// ANNN: set I to NNN
 fn opSetI(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// BNNN: jump to NNN + V0
 fn opJumpV0(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// CXNN: set VX to rand() & NN
 fn opRandom(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// DXYN: draw an 8xN sprite from memory starting at I at (VX, VY)
 fn opDraw(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// EX9E: skip next instruction if the key in VX is pressed
@@ -172,24 +187,39 @@ fn opDraw(self: *CPU, opcode: u16) !?u12 {
 fn opInput(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 /// dispatch an instruction beginning with F
 fn opFXYZ(self: *CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
-    return null;
+    return error.NotImplemented;
 }
 
 test "CPU.init" {
     const cpu = try CPU.init("abc");
     try std.testing.expectEqualSlices(u8, &(.{0} ** 16), &cpu.V);
     try std.testing.expectEqual(@as(u12, 0), cpu.I);
+    // should be the program then a bunch of zeros
     try std.testing.expectEqualSlices(u8, "abc" ++ ([_]u8{0} ** (memory_size - initial_pc - 3)), cpu.mem[initial_pc..]);
     try std.testing.expectEqual(@as(u12, initial_pc), cpu.pc);
     try std.testing.expectEqualSlices(u12, &(.{0} ** 16), &cpu.stack);
     try std.testing.expectEqual(@as(u12, 0), cpu.sp);
 
     try std.testing.expectError(error.ProgramTooLong, CPU.init(&(.{0} ** (memory_size - initial_pc + 1))));
+}
+
+test "CPU.cycle with a basic proram" {
+    const program = [_]u8{
+        0x60, 0xC0, // V0 = 0xC0
+        0x61, 0x53, // V1 = 0x53
+        0x80, 0x14, // V0 += V1 (0x13 with carry)
+        0x12, 0x06, // jump to 0x206 (infinite loop)
+    };
+    var cpu = try CPU.init(&program);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0xC0), cpu.V[0]);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x53), cpu.V[1]);
 }
