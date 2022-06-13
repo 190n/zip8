@@ -1,9 +1,12 @@
+const std = @import("std");
+
 const CPU = @import("./cpu.zig");
 
 pub const ExecutionError = error{
     IllegalOpcode,
     NotImplemented,
     StackOverflow,
+    BadReturn,
 };
 
 /// split an opcode into hex digits
@@ -57,9 +60,23 @@ fn opIllegalArithmetic(vx: u8, vy: u8, vf: *u8) !u8 {
 /// 00E0: clear the screen
 /// 00EE: return
 pub fn op00EX(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+    switch (opcode) {
+        0x00E0 => {
+            for (self.display) |*row| {
+                std.mem.set(bool, row, false);
+            }
+            return null;
+        },
+        0x00EE => {
+            if (self.sp == 0) {
+                return error.BadReturn;
+            } else {
+                self.sp -= 1;
+                return self.stack[self.sp];
+            }
+        },
+        else => return error.IllegalOpcode,
+    }
 }
 
 /// 1NNN: jump to NNN
