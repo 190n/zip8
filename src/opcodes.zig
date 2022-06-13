@@ -43,14 +43,14 @@ pub const msd_opcodes = [16]OpcodeFn{
 };
 
 /// does nothing and returns IllegalOpcode, for use in arrays of function pointers
-pub fn opIllegal(self: *CPU, opcode: u16) !?u12 {
+pub fn opIllegal(self: *const CPU, opcode: u16) !?u12 {
     _ = self;
     _ = opcode;
     return error.IllegalOpcode;
 }
 
 /// same as opIllegal, but conforms to function signature of arithmetic instructions
-fn opIllegalArithmetic(vx: u8, vy: u8, vf: *u8) !u8 {
+fn opIllegalArithmetic(vx: u8, vy: u8, vf: *const u8) !u8 {
     _ = vx;
     _ = vy;
     _ = vf;
@@ -80,7 +80,7 @@ pub fn op00EX(self: *CPU, opcode: u16) !?u12 {
 }
 
 /// 1NNN: jump to NNN
-pub fn opJump(self: *CPU, opcode: u16) !?u12 {
+pub fn opJump(self: *const CPU, opcode: u16) !?u12 {
     _ = self;
     return @truncate(u12, opcode);
 }
@@ -159,26 +159,26 @@ pub fn opArithmetic(self: *CPU, opcode: u16) !?u12 {
 }
 
 /// 8XY0: set VX to VY
-fn opSetRegReg(vx: u8, vy: u8, vf: *u8) !u8 {
+fn opSetRegReg(vx: u8, vy: u8, vf: *const u8) !u8 {
     _ = vx;
     _ = vf;
     return vy;
 }
 
 /// 8XY1: set VX to VX | VY
-fn opOr(vx: u8, vy: u8, vf: *u8) !u8 {
+fn opOr(vx: u8, vy: u8, vf: *const u8) !u8 {
     _ = vf;
     return vx | vy;
 }
 
 /// 8XY2: set VX to VX & VY
-fn opAnd(vx: u8, vy: u8, vf: *u8) !u8 {
+fn opAnd(vx: u8, vy: u8, vf: *const u8) !u8 {
     _ = vf;
     return vx & vy;
 }
 
 /// 8XY3: set VX to VX ^ VY
-fn opXor(vx: u8, vy: u8, vf: *u8) !u8 {
+fn opXor(vx: u8, vy: u8, vf: *const u8) !u8 {
     _ = vf;
     return vx ^ vy;
 }
