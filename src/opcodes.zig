@@ -159,14 +159,14 @@ pub fn opArithmetic(self: *CPU, opcode: u16) !?u12 {
         opSub, // 8XY5
         opShiftRight, // 8XY6
         opSubRev, // 8XY7
-        opIllegalArithmetic,
+        opIllegalArithmetic, // 8XY8 through 8XYD do not exist
         opIllegalArithmetic,
         opIllegalArithmetic,
         opIllegalArithmetic,
         opIllegalArithmetic,
         opIllegalArithmetic,
         opShiftLeft, // 8XYE
-        opIllegalArithmetic,
+        opIllegalArithmetic, // 8XYF does not exist
     };
 
     const which_fn = arithmetic_opcodes[split(opcode)[3]];

@@ -59,7 +59,7 @@ test "CPU.init" {
     try std.testing.expectError(error.ProgramTooLong, CPU.init(&(.{0} ** (memory_size - initial_pc + 1))));
 }
 
-test "CPU.cycle with a basic proram" {
+test "CPU.cycle with a basic program" {
     const program = [_]u8{
         0x60, 0xC0, // V0 = 0xC0
         0x61, 0x53, // V1 = 0x53
