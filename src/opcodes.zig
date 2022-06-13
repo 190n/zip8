@@ -9,18 +9,47 @@ pub const ExecutionError = error{
     BadReturn,
 };
 
-/// split an opcode into hex digits
-fn split(opcode: u16) [4]u4 {
-    return .{
-        @truncate(u4, opcode >> 12),
-        @truncate(u4, opcode >> 8),
-        @truncate(u4, opcode >> 4),
-        @truncate(u4, opcode >> 0),
-    };
-}
+pub const Instruction = struct {
+    /// 4-bit elements of opcode, most significant first
+    nibbles: [4]u4,
+    /// lowest 8 bits
+    low8: u8,
+    /// lowest 12 bits, often a jump target or memory address
+    low12: u12,
+    /// highest 4 bits, indicates which class of opcode is used
+    high4: u4,
+    /// first register specified
+    regX: u4,
+    /// second register specified
+    regY: u4,
+    /// lowest 4 bits, used as disambiguation in some cases
+    low4: u4,
+    /// full opcode, if needed for any reason
+    opcode: u16,
+
+    /// split up an opcode into useful parts
+    pub fn decode(opcode: u16) Instruction {
+        const nibbles = [4]u4{
+            @truncate(u4, opcode >> 12),
+            @truncate(u4, opcode >> 8),
+            @truncate(u4, opcode >> 4),
+            @truncate(u4, opcode >> 0),
+        };
+        return .{
+            .nibbles = nibbles,
+            .low8 = @truncate(u8, opcode),
+            .low12 = @truncate(u12, opcode),
+            .high4 = nibbles[0],
+            .regX = nibbles[1],
+            .regY = nibbles[2],
+            .low4 = nibbles[3],
+            .opcode = opcode,
+        };
+    }
+};
 
 /// a function that executes an instruction and optionally returns the new program counter
-pub const OpcodeFn = fn (self: *CPU, opcode: u16) ExecutionError!?u12;
+pub const OpcodeFn = fn (self: *CPU, inst: Instruction) ExecutionError!?u12;
 
 /// functions that delegate opcodes by the most significant hex digit
 pub const msd_opcodes = [16]OpcodeFn{
@@ -43,9 +72,9 @@ pub const msd_opcodes = [16]OpcodeFn{
 };
 
 /// does nothing and returns IllegalOpcode, for use in arrays of function pointers
-pub fn opIllegal(self: *const CPU, opcode: u16) !?u12 {
+pub fn opIllegal(self: *const CPU, inst: Instruction) !?u12 {
     _ = self;
-    _ = opcode;
+    _ = inst;
     return error.IllegalOpcode;
 }
 
@@ -59,8 +88,8 @@ fn opIllegalArithmetic(vx: u8, vy: u8, vf: *const u8) !u8 {
 
 /// 00E0: clear the screen
 /// 00EE: return
-pub fn op00EX(self: *CPU, opcode: u16) !?u12 {
-    switch (opcode) {
+pub fn op00EX(self: *CPU, inst: Instruction) !?u12 {
+    switch (inst.opcode) {
         0x00E0 => {
             for (self.display) |*row| {
                 std.mem.set(bool, row, false);
@@ -80,20 +109,19 @@ pub fn op00EX(self: *CPU, opcode: u16) !?u12 {
 }
 
 /// 1NNN: jump to NNN
-pub fn opJump(self: *const CPU, opcode: u16) !?u12 {
+pub fn opJump(self: *const CPU, inst: Instruction) !?u12 {
     _ = self;
-    return @truncate(u12, opcode);
+    return inst.low12;
 }
 
 /// 2NNN: call address NNN
-pub fn opCall(self: *CPU, opcode: u16) !?u12 {
+pub fn opCall(self: *CPU, inst: Instruction) !?u12 {
     if (self.sp == CPU.stack_size) {
         return error.StackOverflow;
     } else {
-        const target = @truncate(u12, opcode);
         self.stack[self.sp] = self.pc;
         self.sp += 1;
-        return target;
+        return inst.low12;
     }
 }
 
@@ -103,51 +131,37 @@ fn skipTarget(self: *const CPU, condition: bool) u12 {
 }
 
 /// 3XNN: skip next instruction if VX == NN
-pub fn opSkipEqImm(self: *const CPU, opcode: u16) !?u12 {
-    // get register
-    const vx = self.V[split(opcode)[1]];
-    // get value to compare to
-    const immediate = @truncate(u8, opcode);
-    return skipTarget(self, vx == immediate);
+pub fn opSkipEqImm(self: *const CPU, inst: Instruction) !?u12 {
+    return skipTarget(self, self.V[inst.regX] == inst.low8);
 }
 
 /// 4XNN: skip next instruction if VX != NN
-pub fn opSkipNeImm(self: *const CPU, opcode: u16) !?u12 {
-    // get register
-    const vx = self.V[split(opcode)[1]];
-    // get value to compare to
-    const immediate = @truncate(u8, opcode);
-    return skipTarget(self, vx != immediate);
+pub fn opSkipNeImm(self: *const CPU, inst: Instruction) !?u12 {
+    return skipTarget(self, self.V[inst.regX] != inst.low8);
 }
 
 /// 5XY0: skip next instruction if VX == VY
-pub fn opSkipEqReg(self: *const CPU, opcode: u16) !?u12 {
-    if (split(opcode)[3] != 0x0) {
+pub fn opSkipEqReg(self: *const CPU, inst: Instruction) !?u12 {
+    if (inst.low4 != 0x0) {
         return error.IllegalOpcode;
     }
-    const vx = self.V[split(opcode)[1]];
-    const vy = self.V[split(opcode)[2]];
-    return skipTarget(self, vx == vy);
+    return skipTarget(self, self.V[inst.regX] == self.V[inst.regY]);
 }
 
 /// 6XNN: set VX to NN
-pub fn opSetRegImm(self: *CPU, opcode: u16) !?u12 {
-    const reg = split(opcode)[1];
-    const val = @truncate(u8, opcode);
-    self.V[reg] = val;
+pub fn opSetRegImm(self: *CPU, inst: Instruction) !?u12 {
+    self.V[inst.regX] = inst.low8;
     return null;
 }
 
 /// 7XNN: add NN to VX without carry
-pub fn opAddImm(self: *CPU, opcode: u16) !?u12 {
-    const reg = split(opcode)[1];
-    const val = @truncate(u8, opcode);
-    self.V[reg] +%= val;
+pub fn opAddImm(self: *CPU, inst: Instruction) !?u12 {
+    self.V[inst.regX] +%= inst.low8;
     return null;
 }
 
 /// dispatch an arithmetic instruction beginning with 8
-pub fn opArithmetic(self: *CPU, opcode: u16) !?u12 {
+pub fn opArithmetic(self: *CPU, inst: Instruction) !?u12 {
     // vx is set to the return value of this function
     const ArithmeticOpcodeFn = fn (vx: u8, vy: u8, vf: *u8) ExecutionError!u8;
     const arithmetic_opcodes = [_]ArithmeticOpcodeFn{
@@ -169,9 +183,9 @@ pub fn opArithmetic(self: *CPU, opcode: u16) !?u12 {
         opIllegalArithmetic, // 8XYF does not exist
     };
 
-    const which_fn = arithmetic_opcodes[split(opcode)[3]];
-    const vx = &self.V[split(opcode)[1]];
-    const vy = &self.V[split(opcode)[2]];
+    const which_fn = arithmetic_opcodes[inst.low4];
+    const vx = &self.V[inst.regX];
+    const vy = &self.V[inst.regY];
     vx.* = try which_fn(vx.*, vy.*, &self.V[0xF]);
     return null;
 }
@@ -249,51 +263,48 @@ fn opShiftLeft(vx: u8, vy: u8, vf: *u8) !u8 {
 }
 
 /// 9XY0: skip next instruction if VX != VY
-pub fn opSkipNeReg(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+pub fn opSkipNeReg(self: *const CPU, inst: Instruction) !?u12 {
+    if (inst.low4 != 0x0) {
+        return error.IllegalOpcode;
+    }
+    return skipTarget(self, self.V[inst.regX] != self.V[inst.regY]);
 }
 
 /// ANNN: set I to NNN
-pub fn opSetIImm(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+pub fn opSetIImm(self: *CPU, inst: Instruction) !?u12 {
+    self.I = inst.low12;
+    return null;
 }
 
 /// BNNN: jump to NNN + V0
-pub fn opJumpV0(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+pub fn opJumpV0(self: *const CPU, inst: Instruction) !?u12 {
+    return inst.low12 + self.V[0x0];
 }
 
 /// CXNN: set VX to rand() & NN
-pub fn opRandom(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+pub fn opRandom(self: *CPU, inst: Instruction) !?u12 {
+    self.V[inst.regX] = self.rand.int(u8) & inst.low8;
+    return null;
 }
 
 /// DXYN: draw an 8xN sprite from memory starting at I at (VX, VY)
-pub fn opDraw(self: *CPU, opcode: u16) !?u12 {
+pub fn opDraw(self: *CPU, inst: Instruction) !?u12 {
     _ = self;
-    _ = opcode;
+    _ = inst;
     return error.NotImplemented;
 }
 
 /// EX9E: skip next instruction if the key in VX is pressed
 /// EXA1: skip next instruction if the key in VX is not pressed
-pub fn opInput(self: *CPU, opcode: u16) !?u12 {
+pub fn opInput(self: *CPU, inst: Instruction) !?u12 {
     _ = self;
-    _ = opcode;
+    _ = inst;
     return error.NotImplemented;
 }
 
 /// dispatch an instruction beginning with F
-pub fn opFXYZ(self: *CPU, opcode: u16) !?u12 {
+pub fn opFXYZ(self: *CPU, inst: Instruction) !?u12 {
     _ = self;
-    _ = opcode;
+    _ = inst;
     return error.NotImplemented;
 }

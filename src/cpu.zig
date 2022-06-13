@@ -20,6 +20,8 @@ pc: u12 = initial_pc,
 stack: [stack_size]u12 = .{0} ** stack_size,
 /// which index of the call stack will be used next
 sp: std.math.IntFittingRange(0, stack_size) = 0,
+/// random number generator to use
+rand: std.rand.Random,
 
 /// display is 64x32 stored row-major
 display: [32][64]bool = .{.{false} ** 64} ** 32,
@@ -27,8 +29,8 @@ display: [32][64]bool = .{.{false} ** 64} ** 32,
 keys: [16]bool = .{false} ** 16,
 
 /// initialize a CPU and copy the program into memory
-pub fn init(program: []const u8) error{ProgramTooLong}!CPU {
-    var cpu = CPU{};
+pub fn init(program: []const u8, rand: std.rand.Random) error{ProgramTooLong}!CPU {
+    var cpu = CPU{ .rand = rand };
     if (program.len > (memory_size - initial_pc)) {
         return error.ProgramTooLong;
     }
@@ -38,8 +40,9 @@ pub fn init(program: []const u8) error{ProgramTooLong}!CPU {
 
 pub fn cycle(self: *CPU) ops.ExecutionError!void {
     const opcode: u16 = (@as(u16, self.mem[self.pc]) << 8) | self.mem[self.pc + 1];
-    const func = ops.msd_opcodes[(opcode & 0xf000) >> 12];
-    if (try func(self, opcode)) |new_pc| {
+    const inst = ops.Instruction.decode(opcode);
+    const func = ops.msd_opcodes[inst.high4];
+    if (try func(self, inst)) |new_pc| {
         self.pc = new_pc;
     } else {
         self.pc += 2;
@@ -47,7 +50,7 @@ pub fn cycle(self: *CPU) ops.ExecutionError!void {
 }
 
 test "CPU.init" {
-    const cpu = try CPU.init("abc");
+    const cpu = try CPU.init("abc", undefined);
     try std.testing.expectEqualSlices(u8, &(.{0} ** 16), &cpu.V);
     try std.testing.expectEqual(@as(u12, 0), cpu.I);
     // should be the program then a bunch of zeros
@@ -56,7 +59,7 @@ test "CPU.init" {
     try std.testing.expectEqualSlices(u12, &(.{0} ** stack_size), &cpu.stack);
     try std.testing.expectEqual(@as(@TypeOf(cpu.sp), 0), cpu.sp);
 
-    try std.testing.expectError(error.ProgramTooLong, CPU.init(&(.{0} ** (memory_size - initial_pc + 1))));
+    try std.testing.expectError(error.ProgramTooLong, CPU.init(&(.{0} ** (memory_size - initial_pc + 1)), undefined));
 }
 
 test "CPU.cycle with a basic program" {
@@ -66,7 +69,7 @@ test "CPU.cycle with a basic program" {
         0x80, 0x14, // V0 += V1 (0x13 with carry)
         0x12, 0x06, // jump to 0x206 (infinite loop)
     };
-    var cpu = try CPU.init(&program);
+    var cpu = try CPU.init(&program, undefined);
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0xC0), cpu.V[0x0]);
     try cpu.cycle();
