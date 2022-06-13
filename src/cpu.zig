@@ -6,6 +6,7 @@ const ops = @import("./opcodes.zig");
 
 pub const memory_size = 4096;
 pub const initial_pc = 0x200;
+pub const stack_size = 16;
 
 /// normal 8-bit registers V0-VF
 V: [16]u8 = .{0} ** 16,
@@ -16,9 +17,9 @@ mem: [memory_size]u8 = .{0} ** memory_size,
 /// program counter
 pc: u12 = initial_pc,
 /// call stack
-stack: [16]u12 = .{0} ** 16,
+stack: [stack_size]u12 = .{0} ** stack_size,
 /// which index of the call stack will be used next
-sp: u4 = 0,
+sp: std.math.IntFittingRange(0, stack_size - 1) = 0,
 
 /// display is 64x32 stored row-major
 display: [32][64]bool = .{.{false} ** 64} ** 32,
@@ -52,8 +53,8 @@ test "CPU.init" {
     // should be the program then a bunch of zeros
     try std.testing.expectEqualSlices(u8, "abc" ++ ([_]u8{0} ** (memory_size - initial_pc - 3)), cpu.mem[initial_pc..]);
     try std.testing.expectEqual(@as(u12, initial_pc), cpu.pc);
-    try std.testing.expectEqualSlices(u12, &(.{0} ** 16), &cpu.stack);
-    try std.testing.expectEqual(@as(u12, 0), cpu.sp);
+    try std.testing.expectEqualSlices(u12, &(.{0} ** stack_size), &cpu.stack);
+    try std.testing.expectEqual(@as(@TypeOf(cpu.sp), 0), cpu.sp);
 
     try std.testing.expectError(error.ProgramTooLong, CPU.init(&(.{0} ** (memory_size - initial_pc + 1))));
 }
