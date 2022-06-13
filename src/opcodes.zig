@@ -159,67 +159,76 @@ pub fn opArithmetic(self: *CPU, opcode: u16) !?u12 {
     return null;
 }
 
+/// 8XY0: set VX to VY
 fn opSetRegReg(vx: u8, vy: u8, vf: *u8) !u8 {
     _ = vx;
-    _ = vy;
     _ = vf;
-    return 0;
+    return vy;
 }
 
+/// 8XY1: set VX to VX | VY
 fn opOr(vx: u8, vy: u8, vf: *u8) !u8 {
-    _ = vx;
-    _ = vy;
     _ = vf;
-    return 0;
+    return vx | vy;
 }
 
+/// 8XY2: set VX to VX & VY
 fn opAnd(vx: u8, vy: u8, vf: *u8) !u8 {
-    _ = vx;
-    _ = vy;
     _ = vf;
-    return 0;
+    return vx & vy;
 }
 
+/// 8XY3: set VX to VX ^ VY
 fn opXor(vx: u8, vy: u8, vf: *u8) !u8 {
-    _ = vx;
-    _ = vy;
     _ = vf;
-    return 0;
+    return vx ^ vy;
 }
 
+/// 8XY4: set VX to VX + VY; set VF to 1 if carry occurred, 0 otherwise
 fn opAdd(vx: u8, vy: u8, vf: *u8) !u8 {
-    _ = vx;
-    _ = vy;
-    _ = vf;
-    return 0;
+    var new_vx = vx;
+    if (@addWithOverflow(u8, vx, vy, &new_vx)) {
+        vf.* = 1;
+    } else {
+        vf.* = 0;
+    }
+    return new_vx;
 }
 
+/// 8XY5: set VX to VX - VY; set VF to 0 if borrow occurred, 1 otherwise
 fn opSub(vx: u8, vy: u8, vf: *u8) !u8 {
-    _ = vx;
-    _ = vy;
-    _ = vf;
-    return 0;
+    var new_vx = vx;
+    if (@subWithOverflow(u8, vx, vy, &new_vx)) {
+        vf.* = 0;
+    } else {
+        vf.* = 1;
+    }
+    return new_vx;
 }
 
+/// 8XY6: set VX to VY >> 1, set VF to the former least significant bit of VY
 fn opShiftRight(vx: u8, vy: u8, vf: *u8) !u8 {
     _ = vx;
-    _ = vy;
-    _ = vf;
-    return 0;
+    vf.* = vy & 0x01;
+    return vy >> 1;
 }
 
+/// 8XY7: set VX to VY - VX; set VF to 0 if borrow occurred, 1 otherwise
 fn opSubRev(vx: u8, vy: u8, vf: *u8) !u8 {
-    _ = vx;
-    _ = vy;
-    _ = vf;
-    return 0;
+    var new_vx = vx;
+    if (@subWithOverflow(u8, vy, vx, &new_vx)) {
+        vf.* = 0;
+    } else {
+        vf.* = 1;
+    }
+    return new_vx;
 }
 
+/// 8XYE: set VX to VY << 1, set VF to the former most significant bit of VY
 fn opShiftLeft(vx: u8, vy: u8, vf: *u8) !u8 {
     _ = vx;
-    _ = vy;
-    _ = vf;
-    return 0;
+    vf.* = vy >> 7;
+    return vy << 1;
 }
 
 /// 9XY0: skip next instruction if VX != VY
