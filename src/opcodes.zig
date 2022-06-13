@@ -82,8 +82,7 @@ pub fn op00EX(self: *CPU, opcode: u16) !?u12 {
 /// 1NNN: jump to NNN
 pub fn opJump(self: *CPU, opcode: u16) !?u12 {
     _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+    return @truncate(u12, opcode);
 }
 
 /// 2NNN: call address NNN
