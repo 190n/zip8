@@ -68,7 +68,17 @@ test "CPU.cycle with a basic proram" {
     };
     var cpu = try CPU.init(&program);
     try cpu.cycle();
-    try std.testing.expectEqual(@as(u8, 0xC0), cpu.V[0]);
+    try std.testing.expectEqual(@as(u8, 0xC0), cpu.V[0x0]);
     try cpu.cycle();
-    try std.testing.expectEqual(@as(u8, 0x53), cpu.V[1]);
+    try std.testing.expectEqual(@as(u8, 0x53), cpu.V[0x1]);
+    try cpu.cycle();
+    // check that V0 has the right value and VF indicates overflow
+    try std.testing.expectEqual(@as(u8, 0x13), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 0x01), cpu.V[0xF]);
+    // check that we are now in a loop
+    var i: u32 = 0;
+    while (i < 10) : (i += 1) {
+        try cpu.cycle();
+        try std.testing.expectEqual(@as(u12, cpu.pc), 0x206);
+    }
 }
