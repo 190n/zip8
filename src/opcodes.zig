@@ -87,30 +87,47 @@ pub fn opJump(self: *const CPU, opcode: u16) !?u12 {
 
 /// 2NNN: call address NNN
 pub fn opCall(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+    if (self.sp == CPU.stack_size) {
+        return error.StackOverflow;
+    } else {
+        const target = @truncate(u12, opcode);
+        self.stack[self.sp] = self.pc;
+        self.sp += 1;
+        return target;
+    }
+}
+
+/// calculate the new PC, using condition as whether the next instruction should be skipped
+fn skipTarget(self: *const CPU, condition: bool) u12 {
+    return self.pc + @as(u12, if (condition) 4 else 2);
 }
 
 /// 3XNN: skip next instruction if VX == NN
-pub fn opSkipEqImm(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+pub fn opSkipEqImm(self: *const CPU, opcode: u16) !?u12 {
+    // get register
+    const vx = self.V[split(opcode)[1]];
+    // get value to compare to
+    const immediate = @truncate(u8, opcode);
+    return skipTarget(self, vx == immediate);
 }
 
 /// 4XNN: skip next instruction if VX != NN
-pub fn opSkipNeImm(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+pub fn opSkipNeImm(self: *const CPU, opcode: u16) !?u12 {
+    // get register
+    const vx = self.V[split(opcode)[1]];
+    // get value to compare to
+    const immediate = @truncate(u8, opcode);
+    return skipTarget(self, vx != immediate);
 }
 
 /// 5XY0: skip next instruction if VX == VY
-pub fn opSkipEqReg(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+pub fn opSkipEqReg(self: *const CPU, opcode: u16) !?u12 {
+    if (split(opcode)[3] != 0x0) {
+        return error.IllegalOpcode;
+    }
+    const vx = self.V[split(opcode)[1]];
+    const vy = self.V[split(opcode)[2]];
+    return skipTarget(self, vx == vy);
 }
 
 /// 6XNN: set VX to NN
