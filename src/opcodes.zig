@@ -140,9 +140,10 @@ pub fn opSetRegImm(self: *CPU, opcode: u16) !?u12 {
 
 /// 7XNN: add NN to VX without carry
 pub fn opAddImm(self: *CPU, opcode: u16) !?u12 {
-    _ = self;
-    _ = opcode;
-    return error.NotImplemented;
+    const reg = split(opcode)[1];
+    const val = @truncate(u8, opcode);
+    self.V[reg] +%= val;
+    return null;
 }
 
 /// dispatch an arithmetic instruction beginning with 8
