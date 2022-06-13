@@ -19,7 +19,7 @@ pc: u12 = initial_pc,
 /// call stack
 stack: [stack_size]u12 = .{0} ** stack_size,
 /// which index of the call stack will be used next
-sp: std.math.IntFittingRange(0, stack_size - 1) = 0,
+sp: std.math.IntFittingRange(0, stack_size) = 0,
 
 /// display is 64x32 stored row-major
 display: [32][64]bool = .{.{false} ** 64} ** 32,
