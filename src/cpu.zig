@@ -61,6 +61,14 @@ test "CPU.init" {
     try std.testing.expectEqualSlices(u12, &(.{0} ** stack_size), &cpu.stack);
     try std.testing.expectEqual(@as(@TypeOf(cpu.sp), 0), cpu.sp);
 
+    for (cpu.display) |row| {
+        for (row) |pixel| {
+            try std.testing.expectEqual(false, pixel);
+        }
+    }
+
+    try std.testing.expectEqualSlices(bool, &(.{false} ** 16), &cpu.keys);
+
     try std.testing.expectError(error.ProgramTooLong, CPU.init(&(.{0} ** (memory_size - initial_pc + 1)), undefined));
 }
 
