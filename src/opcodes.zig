@@ -126,18 +126,18 @@ pub fn opCall(self: *CPU, inst: Instruction) !?u12 {
 }
 
 /// calculate the new PC, using condition as whether the next instruction should be skipped
-fn skipTarget(self: *const CPU, condition: bool) u12 {
+fn skipNextInstructionIf(self: *const CPU, condition: bool) u12 {
     return self.pc + @as(u12, if (condition) 4 else 2);
 }
 
 /// 3XNN: skip next instruction if VX == NN
 pub fn opSkipEqImm(self: *const CPU, inst: Instruction) !?u12 {
-    return skipTarget(self, self.V[inst.regX] == inst.low8);
+    return skipNextInstructionIf(self, self.V[inst.regX] == inst.low8);
 }
 
 /// 4XNN: skip next instruction if VX != NN
 pub fn opSkipNeImm(self: *const CPU, inst: Instruction) !?u12 {
-    return skipTarget(self, self.V[inst.regX] != inst.low8);
+    return skipNextInstructionIf(self, self.V[inst.regX] != inst.low8);
 }
 
 /// 5XY0: skip next instruction if VX == VY
@@ -145,7 +145,7 @@ pub fn opSkipEqReg(self: *const CPU, inst: Instruction) !?u12 {
     if (inst.low4 != 0x0) {
         return error.IllegalOpcode;
     }
-    return skipTarget(self, self.V[inst.regX] == self.V[inst.regY]);
+    return skipNextInstructionIf(self, self.V[inst.regX] == self.V[inst.regY]);
 }
 
 /// 6XNN: set VX to NN
@@ -267,7 +267,7 @@ pub fn opSkipNeReg(self: *const CPU, inst: Instruction) !?u12 {
     if (inst.low4 != 0x0) {
         return error.IllegalOpcode;
     }
-    return skipTarget(self, self.V[inst.regX] != self.V[inst.regY]);
+    return skipNextInstructionIf(self, self.V[inst.regX] != self.V[inst.regY]);
 }
 
 /// ANNN: set I to NNN
@@ -319,8 +319,8 @@ pub fn opDraw(self: *CPU, inst: Instruction) !?u12 {
 /// EXA1: skip next instruction if the key in VX is not pressed
 pub fn opInput(self: *CPU, inst: Instruction) !?u12 {
     return switch (inst.low8) {
-        0x9E => skipTarget(self, self.keys[self.V[inst.regX]]),
-        0xA1 => skipTarget(self, !self.keys[self.V[inst.regX]]),
+        0x9E => skipNextInstructionIf(self, self.keys[self.V[inst.regX]]),
+        0xA1 => skipNextInstructionIf(self, !self.keys[self.V[inst.regX]]),
         else => error.IllegalOpcode,
     };
 }
