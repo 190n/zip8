@@ -7,6 +7,8 @@ const ops = @import("./opcodes.zig");
 pub const memory_size = 4096;
 pub const initial_pc = 0x200;
 pub const stack_size = 16;
+pub const display_width = 64;
+pub const display_height = 32;
 
 /// normal 8-bit registers V0-VF
 V: [16]u8 = .{0} ** 16,
@@ -24,7 +26,7 @@ sp: std.math.IntFittingRange(0, stack_size) = 0,
 rand: std.rand.Random,
 
 /// display is 64x32 stored row-major
-display: [32][64]bool = .{.{false} ** 64} ** 32,
+display: [display_height][display_width]bool = .{.{false} ** display_width} ** display_height,
 /// whether each key 0-F is pressed
 keys: [16]bool = .{false} ** 16,
 
