@@ -2,7 +2,7 @@ const CPU = @This();
 
 const std = @import("std");
 
-const ops = @import("./opcodes.zig");
+const Instruction = @import("./instruction.zig");
 
 pub const memory_size = 4096;
 pub const initial_pc = 0x200;
@@ -47,11 +47,10 @@ pub fn init(program: []const u8, rand: std.rand.Random) error{ProgramTooLong}!CP
     return cpu;
 }
 
-pub fn cycle(self: *CPU) ops.ExecutionError!void {
+pub fn cycle(self: *CPU) !void {
     const opcode: u16 = (@as(u16, self.mem[self.pc]) << 8) | self.mem[self.pc + 1];
-    const inst = ops.Instruction.decode(opcode);
-    const func = ops.msd_opcodes[inst.high4];
-    if (try func(self, inst)) |new_pc| {
+    const inst = Instruction.decode(opcode);
+    if (try inst.exec(self)) |new_pc| {
         self.pc = new_pc;
     } else {
         self.pc += 2;
