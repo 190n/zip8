@@ -30,6 +30,11 @@ display: [display_height][display_width]bool = .{.{false} ** display_width} ** d
 /// whether each key 0-F is pressed
 keys: [16]bool = .{false} ** 16,
 
+/// delay timer, counts down at 60Hz if nonzero
+dt: u8 = 0,
+/// sound timer, counts down to zero at 60Hz and sound is played if nonzero
+st: u8 = 0,
+
 /// initialize a CPU and copy the program into memory
 pub fn init(program: []const u8, rand: std.rand.Random) error{ProgramTooLong}!CPU {
     var cpu = CPU{ .rand = rand };
