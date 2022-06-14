@@ -298,19 +298,18 @@ pub fn opDraw(self: *CPU, inst: Instruction) !?u12 {
         var x_sprite: u4 = 0;
         while (x_sprite < 8) : (x_sprite += 1) {
             const mask = @as(u8, 0b10000000) >> @intCast(u3, x_sprite);
-            const pixel: u1 = if (row & mask == 0) 0 else 1;
+            const pixel = (row & mask == 0);
             const x = x_start + x_sprite;
             const y = y_start + y_sprite;
             if (x >= CPU.display_width or y >= CPU.display_height) {
                 continue;
             }
-            if (pixel != 0 and self.display[y][x]) {
+            if (pixel and self.display[y][x]) {
                 // pixel turned off
                 self.V[0xF] = 1;
             }
             // draw using XOR
-            // ugly as we convert from bool to u1 and back
-            self.display[y][x] = (pixel ^ @as(u1, if (self.display[y][x]) 1 else 0)) != 0;
+            self.display[y][x] = (pixel != self.display[y][x]);
         }
     }
     return null;
