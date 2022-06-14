@@ -49,7 +49,7 @@ pub const Instruction = struct {
 };
 
 /// a function that executes an instruction and optionally returns the new program counter
-pub const OpcodeFn = fn (self: *CPU, inst: Instruction) ExecutionError!?u12;
+pub const OpcodeFn = fn (cpu: *CPU, inst: Instruction) ExecutionError!?u12;
 
 /// functions that delegate opcodes by the most significant hex digit
 pub const msd_opcodes = [16]OpcodeFn{
@@ -72,8 +72,8 @@ pub const msd_opcodes = [16]OpcodeFn{
 };
 
 /// does nothing and returns IllegalOpcode, for use in arrays of function pointers
-pub fn opIllegal(self: *const CPU, inst: Instruction) !?u12 {
-    _ = self;
+pub fn opIllegal(cpu: *const CPU, inst: Instruction) !?u12 {
+    _ = cpu;
     _ = inst;
     return error.IllegalOpcode;
 }
@@ -88,20 +88,20 @@ fn opIllegalArithmetic(vx: u8, vy: u8, vf: *const u8) !u8 {
 
 /// 00E0: clear the screen
 /// 00EE: return
-pub fn op00EX(self: *CPU, inst: Instruction) !?u12 {
+pub fn op00EX(cpu: *CPU, inst: Instruction) !?u12 {
     switch (inst.opcode) {
         0x00E0 => {
-            for (self.display) |*row| {
+            for (cpu.display) |*row| {
                 std.mem.set(bool, row, false);
             }
             return null;
         },
         0x00EE => {
-            if (self.sp == 0) {
+            if (cpu.sp == 0) {
                 return error.BadReturn;
             } else {
-                self.sp -= 1;
-                return self.stack[self.sp];
+                cpu.sp -= 1;
+                return cpu.stack[cpu.sp];
             }
         },
         else => return error.IllegalOpcode,
@@ -109,59 +109,59 @@ pub fn op00EX(self: *CPU, inst: Instruction) !?u12 {
 }
 
 /// 1NNN: jump to NNN
-pub fn opJump(self: *const CPU, inst: Instruction) !?u12 {
-    _ = self;
+pub fn opJump(cpu: *const CPU, inst: Instruction) !?u12 {
+    _ = cpu;
     return inst.low12;
 }
 
 /// 2NNN: call address NNN
-pub fn opCall(self: *CPU, inst: Instruction) !?u12 {
-    if (self.sp == CPU.stack_size) {
+pub fn opCall(cpu: *CPU, inst: Instruction) !?u12 {
+    if (cpu.sp == CPU.stack_size) {
         return error.StackOverflow;
     } else {
-        self.stack[self.sp] = self.pc;
-        self.sp += 1;
+        cpu.stack[cpu.sp] = cpu.pc;
+        cpu.sp += 1;
         return inst.low12;
     }
 }
 
 /// calculate the new PC, using condition as whether the next instruction should be skipped
-fn skipNextInstructionIf(self: *const CPU, condition: bool) u12 {
-    return self.pc + @as(u12, if (condition) 4 else 2);
+fn skipNextInstructionIf(cpu: *const CPU, condition: bool) u12 {
+    return cpu.pc + @as(u12, if (condition) 4 else 2);
 }
 
 /// 3XNN: skip next instruction if VX == NN
-pub fn opSkipEqImm(self: *const CPU, inst: Instruction) !?u12 {
-    return skipNextInstructionIf(self, self.V[inst.regX] == inst.low8);
+pub fn opSkipEqImm(cpu: *const CPU, inst: Instruction) !?u12 {
+    return skipNextInstructionIf(cpu, cpu.V[inst.regX] == inst.low8);
 }
 
 /// 4XNN: skip next instruction if VX != NN
-pub fn opSkipNeImm(self: *const CPU, inst: Instruction) !?u12 {
-    return skipNextInstructionIf(self, self.V[inst.regX] != inst.low8);
+pub fn opSkipNeImm(cpu: *const CPU, inst: Instruction) !?u12 {
+    return skipNextInstructionIf(cpu, cpu.V[inst.regX] != inst.low8);
 }
 
 /// 5XY0: skip next instruction if VX == VY
-pub fn opSkipEqReg(self: *const CPU, inst: Instruction) !?u12 {
+pub fn opSkipEqReg(cpu: *const CPU, inst: Instruction) !?u12 {
     if (inst.low4 != 0x0) {
         return error.IllegalOpcode;
     }
-    return skipNextInstructionIf(self, self.V[inst.regX] == self.V[inst.regY]);
+    return skipNextInstructionIf(cpu, cpu.V[inst.regX] == cpu.V[inst.regY]);
 }
 
 /// 6XNN: set VX to NN
-pub fn opSetRegImm(self: *CPU, inst: Instruction) !?u12 {
-    self.V[inst.regX] = inst.low8;
+pub fn opSetRegImm(cpu: *CPU, inst: Instruction) !?u12 {
+    cpu.V[inst.regX] = inst.low8;
     return null;
 }
 
 /// 7XNN: add NN to VX without carry
-pub fn opAddImm(self: *CPU, inst: Instruction) !?u12 {
-    self.V[inst.regX] +%= inst.low8;
+pub fn opAddImm(cpu: *CPU, inst: Instruction) !?u12 {
+    cpu.V[inst.regX] +%= inst.low8;
     return null;
 }
 
 /// dispatch an arithmetic instruction beginning with 8
-pub fn opArithmetic(self: *CPU, inst: Instruction) !?u12 {
+pub fn opArithmetic(cpu: *CPU, inst: Instruction) !?u12 {
     // vx is set to the return value of this function
     const ArithmeticOpcodeFn = fn (vx: u8, vy: u8, vf: *u8) ExecutionError!u8;
     const arithmetic_opcodes = [_]ArithmeticOpcodeFn{
@@ -184,9 +184,9 @@ pub fn opArithmetic(self: *CPU, inst: Instruction) !?u12 {
     };
 
     const which_fn = arithmetic_opcodes[inst.low4];
-    const vx = &self.V[inst.regX];
-    const vy = &self.V[inst.regY];
-    vx.* = try which_fn(vx.*, vy.*, &self.V[0xF]);
+    const vx = &cpu.V[inst.regX];
+    const vy = &cpu.V[inst.regY];
+    vx.* = try which_fn(vx.*, vy.*, &cpu.V[0xF]);
     return null;
 }
 
@@ -263,37 +263,37 @@ fn opShiftLeft(vx: u8, vy: u8, vf: *u8) !u8 {
 }
 
 /// 9XY0: skip next instruction if VX != VY
-pub fn opSkipNeReg(self: *const CPU, inst: Instruction) !?u12 {
+pub fn opSkipNeReg(cpu: *const CPU, inst: Instruction) !?u12 {
     if (inst.low4 != 0x0) {
         return error.IllegalOpcode;
     }
-    return skipNextInstructionIf(self, self.V[inst.regX] != self.V[inst.regY]);
+    return skipNextInstructionIf(cpu, cpu.V[inst.regX] != cpu.V[inst.regY]);
 }
 
 /// ANNN: set I to NNN
-pub fn opSetIImm(self: *CPU, inst: Instruction) !?u12 {
-    self.I = inst.low12;
+pub fn opSetIImm(cpu: *CPU, inst: Instruction) !?u12 {
+    cpu.I = inst.low12;
     return null;
 }
 
 /// BNNN: jump to NNN + V0
-pub fn opJumpV0(self: *const CPU, inst: Instruction) !?u12 {
-    return inst.low12 + self.V[0x0];
+pub fn opJumpV0(cpu: *const CPU, inst: Instruction) !?u12 {
+    return inst.low12 + cpu.V[0x0];
 }
 
 /// CXNN: set VX to rand() & NN
-pub fn opRandom(self: *CPU, inst: Instruction) !?u12 {
-    self.V[inst.regX] = self.rand.int(u8) & inst.low8;
+pub fn opRandom(cpu: *CPU, inst: Instruction) !?u12 {
+    cpu.V[inst.regX] = cpu.rand.int(u8) & inst.low8;
     return null;
 }
 
 /// DXYN: draw an 8xN sprite from memory starting at I at (VX, VY); set VF to 1 if any pixel was
 /// turned off, 0 otherwise
-pub fn opDraw(self: *CPU, inst: Instruction) !?u12 {
-    self.V[0xF] = 0;
-    const sprite: []const u8 = self.mem[(self.I)..(self.I + inst.low4)];
-    const x_start = self.V[inst.regX] % CPU.display_width;
-    const y_start = self.V[inst.regY] % CPU.display_height;
+pub fn opDraw(cpu: *CPU, inst: Instruction) !?u12 {
+    cpu.V[0xF] = 0;
+    const sprite: []const u8 = cpu.mem[(cpu.I)..(cpu.I + inst.low4)];
+    const x_start = cpu.V[inst.regX] % CPU.display_width;
+    const y_start = cpu.V[inst.regY] % CPU.display_height;
     for (sprite) |row, y_sprite| {
         var x_sprite: u4 = 0;
         while (x_sprite < 8) : (x_sprite += 1) {
@@ -304,12 +304,12 @@ pub fn opDraw(self: *CPU, inst: Instruction) !?u12 {
             if (x >= CPU.display_width or y >= CPU.display_height) {
                 continue;
             }
-            if (pixel and self.display[y][x]) {
+            if (pixel and cpu.display[y][x]) {
                 // pixel turned off
-                self.V[0xF] = 1;
+                cpu.V[0xF] = 1;
             }
             // draw using XOR
-            self.display[y][x] = (pixel != self.display[y][x]);
+            cpu.display[y][x] = (pixel != cpu.display[y][x]);
         }
     }
     return null;
@@ -317,16 +317,16 @@ pub fn opDraw(self: *CPU, inst: Instruction) !?u12 {
 
 /// EX9E: skip next instruction if the key in VX is pressed
 /// EXA1: skip next instruction if the key in VX is not pressed
-pub fn opInput(self: *CPU, inst: Instruction) !?u12 {
+pub fn opInput(cpu: *CPU, inst: Instruction) !?u12 {
     return switch (inst.low8) {
-        0x9E => skipNextInstructionIf(self, self.keys[self.V[inst.regX]]),
-        0xA1 => skipNextInstructionIf(self, !self.keys[self.V[inst.regX]]),
+        0x9E => skipNextInstructionIf(cpu, cpu.keys[cpu.V[inst.regX]]),
+        0xA1 => skipNextInstructionIf(cpu, !cpu.keys[cpu.V[inst.regX]]),
         else => error.IllegalOpcode,
     };
 }
 
 /// dispatch an instruction beginning with F
-pub fn opFXYZ(self: *CPU, inst: Instruction) !?u12 {
+pub fn opFXYZ(cpu: *CPU, inst: Instruction) !?u12 {
     const misc_opcode_fns = comptime blk: {
         var fns: [256]OpcodeFn = .{opIllegal} ** 256;
         fns[0x07] = opStoreDT;
@@ -341,7 +341,7 @@ pub fn opFXYZ(self: *CPU, inst: Instruction) !?u12 {
         break :blk fns;
     };
 
-    return misc_opcode_fns[inst.low8](self, inst);
+    return misc_opcode_fns[inst.low8](cpu, inst);
 }
 
 /// FX07: store the value of the delay timer in VX
