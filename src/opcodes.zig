@@ -327,7 +327,82 @@ pub fn opInput(self: *CPU, inst: Instruction) !?u12 {
 
 /// dispatch an instruction beginning with F
 pub fn opFXYZ(self: *CPU, inst: Instruction) !?u12 {
+    const misc_opcode_fns = comptime blk: {
+        var fns: [256]OpcodeFn = .{opIllegal} ** 256;
+        fns[0x07] = opStoreDT;
+        fns[0x0A] = opWaitForKey;
+        fns[0x15] = opSetDT;
+        fns[0x18] = opSetST;
+        fns[0x1E] = opIncIReg;
+        fns[0x29] = opSetISprite;
+        fns[0x33] = opStoreBCD;
+        fns[0x55] = opStore;
+        fns[0x65] = opLoad;
+        break :blk fns;
+    };
+
+    return misc_opcode_fns[inst.low8](self, inst);
+}
+
+/// FX07: store the value of the delay timer in VX
+fn opStoreDT(self: *CPU, inst: Instruction) !?u12 {
     _ = self;
     _ = inst;
-    return error.NotImplemented;
+    return null;
+}
+
+/// FX0A: wait until any key is pressed, then store the key that was pressed in VX
+fn opWaitForKey(self: *CPU, inst: Instruction) !?u12 {
+    _ = self;
+    _ = inst;
+    return null;
+}
+
+/// FX15: set the delay timer to the value of VX
+fn opSetDT(self: *CPU, inst: Instruction) !?u12 {
+    _ = self;
+    _ = inst;
+    return null;
+}
+
+/// FX18: set the sound timer to the value of VX
+fn opSetST(self: *CPU, inst: Instruction) !?u12 {
+    _ = self;
+    _ = inst;
+    return null;
+}
+
+/// FX1E: increment I by the value of VX
+fn opIncIReg(self: *CPU, inst: Instruction) !?u12 {
+    _ = self;
+    _ = inst;
+    return null;
+}
+
+/// FX29: set I to the address of the sprite for the digit in VX
+fn opSetISprite(self: *CPU, inst: Instruction) !?u12 {
+    _ = self;
+    _ = inst;
+    return null;
+}
+
+/// FX33: store the binary-coded decimal version of the value of VX in I, I + 1, and I + 2
+fn opStoreBCD(self: *CPU, inst: Instruction) !?u12 {
+    _ = self;
+    _ = inst;
+    return null;
+}
+
+/// FX55: store registers [V0, VX] in memory starting at I; set I to I + X + 1
+fn opStore(self: *CPU, inst: Instruction) !?u12 {
+    _ = self;
+    _ = inst;
+    return null;
+}
+
+/// FX65: load values from memory starting at I into registers [V0, Vx]; set I to I + X + 1
+fn opLoad(self: *CPU, inst: Instruction) !?u12 {
+    _ = self;
+    _ = inst;
+    return null;
 }
