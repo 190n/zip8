@@ -345,64 +345,67 @@ pub fn opFXYZ(cpu: *CPU, inst: Instruction) !?u12 {
 }
 
 /// FX07: store the value of the delay timer in VX
-fn opStoreDT(self: *CPU, inst: Instruction) !?u12 {
-    _ = self;
-    _ = inst;
+fn opStoreDT(cpu: *CPU, inst: Instruction) !?u12 {
+    cpu.V[inst.regX] = cpu.dt;
     return null;
 }
 
 /// FX0A: wait until any key is pressed, then store the key that was pressed in VX
-fn opWaitForKey(self: *CPU, inst: Instruction) !?u12 {
-    _ = self;
+fn opWaitForKey(cpu: *CPU, inst: Instruction) !?u12 {
+    _ = cpu;
     _ = inst;
-    return null;
+    return error.NotImplemented;
 }
 
 /// FX15: set the delay timer to the value of VX
-fn opSetDT(self: *CPU, inst: Instruction) !?u12 {
-    _ = self;
-    _ = inst;
+fn opSetDT(cpu: *CPU, inst: Instruction) !?u12 {
+    cpu.dt = cpu.V[inst.regX];
     return null;
 }
 
 /// FX18: set the sound timer to the value of VX
-fn opSetST(self: *CPU, inst: Instruction) !?u12 {
-    _ = self;
-    _ = inst;
+fn opSetST(cpu: *CPU, inst: Instruction) !?u12 {
+    cpu.st = cpu.V[inst.regX];
     return null;
 }
 
 /// FX1E: increment I by the value of VX
-fn opIncIReg(self: *CPU, inst: Instruction) !?u12 {
-    _ = self;
-    _ = inst;
+fn opIncIReg(cpu: *CPU, inst: Instruction) !?u12 {
+    cpu.I +%= cpu.V[inst.regX];
     return null;
 }
 
 /// FX29: set I to the address of the sprite for the digit in VX
-fn opSetISprite(self: *CPU, inst: Instruction) !?u12 {
-    _ = self;
-    _ = inst;
+fn opSetISprite(cpu: *CPU, inst: Instruction) !?u12 {
+    cpu.I = CPU.font_base_address + (@truncate(u4, cpu.V[inst.regX]) * CPU.font_character_size);
     return null;
 }
 
 /// FX33: store the binary-coded decimal version of the value of VX in I, I + 1, and I + 2
-fn opStoreBCD(self: *CPU, inst: Instruction) !?u12 {
-    _ = self;
-    _ = inst;
+fn opStoreBCD(cpu: *CPU, inst: Instruction) !?u12 {
+    const value = cpu.V[inst.regX];
+    cpu.mem[cpu.I] = value / 100;
+    cpu.mem[cpu.I + 1] = (value / 10) % 10;
+    cpu.mem[cpu.I + 2] = value % 10;
     return null;
 }
 
 /// FX55: store registers [V0, VX] in memory starting at I; set I to I + X + 1
-fn opStore(self: *CPU, inst: Instruction) !?u12 {
-    _ = self;
-    _ = inst;
+fn opStore(cpu: *CPU, inst: Instruction) !?u12 {
+    var offset: u5 = 0;
+    while (offset <= inst.regX) : (offset += 1) {
+        cpu.mem[cpu.I] = cpu.V[offset];
+        cpu.I += 1;
+    }
     return null;
 }
 
 /// FX65: load values from memory starting at I into registers [V0, Vx]; set I to I + X + 1
-fn opLoad(self: *CPU, inst: Instruction) !?u12 {
-    _ = self;
-    _ = inst;
+fn opLoad(cpu: *CPU, inst: Instruction) !?u12 {
+    var offset: u5 = 0;
+    while (offset <= inst.regX) : (offset += 1) {
+        cpu.V[offset] = cpu.mem[cpu.I];
+        cpu.I += 1;
+    }
     return null;
 }
