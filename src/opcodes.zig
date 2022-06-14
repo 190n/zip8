@@ -319,9 +319,11 @@ pub fn opDraw(self: *CPU, inst: Instruction) !?u12 {
 /// EX9E: skip next instruction if the key in VX is pressed
 /// EXA1: skip next instruction if the key in VX is not pressed
 pub fn opInput(self: *CPU, inst: Instruction) !?u12 {
-    _ = self;
-    _ = inst;
-    return error.NotImplemented;
+    return switch (inst.low8) {
+        0x9E => skipTarget(self, self.keys[self.V[inst.regX]]),
+        0xA1 => skipTarget(self, !self.keys[self.V[inst.regX]]),
+        else => error.IllegalOpcode,
+    };
 }
 
 /// dispatch an instruction beginning with F
