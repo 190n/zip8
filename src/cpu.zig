@@ -9,6 +9,8 @@ pub const initial_pc = 0x200;
 pub const stack_size = 16;
 pub const display_width = 64;
 pub const display_height = 32;
+pub const font_base_address = 0x000;
+pub const font_character_size = 5;
 
 /// normal 8-bit registers V0-VF
 V: [16]u8 = .{0} ** 16,
