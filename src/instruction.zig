@@ -593,10 +593,42 @@ fn opSkipNeReg(self: Instruction, cpu: *const CPU) !?u12 {
     return skipNextInstructionIf(cpu, cpu.V[self.regX] != cpu.V[self.regY]);
 }
 
+test "9XY0 skip if VX != VY" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x23, // V0 = 0x23
+        0x61, 0xB2, // V1 = 0xB2
+        0x90, 0x10, // skip
+        0x00, 0x00, // skipped
+        0x91, 0x00, // skip
+        0x00, 0x00, // skipped
+        0x93, 0x20, // won't skip
+        0x90, 0x11, // error
+    }, testing_rand);
+    // initialize registers
+    try cpu.cycle();
+    try cpu.cycle();
+    // testing skips
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x20C), cpu.pc);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x20E), cpu.pc);
+    try std.testing.expectError(error.IllegalOpcode, cpu.cycle());
+}
+
 /// ANNN: set I to NNN
 fn opSetIImm(self: Instruction, cpu: *CPU) !?u12 {
     cpu.I = self.low12;
     return null;
+}
+
+test "ANNN set I" {
+    var cpu = try CPU.init(&[_]u8{
+        0xA6, 0x83,
+    }, testing_rand);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x683), cpu.I);
 }
 
 /// BNNN: jump to NNN + V0
@@ -604,10 +636,38 @@ fn opJumpV0(self: Instruction, cpu: *const CPU) !?u12 {
     return self.low12 + cpu.V[0x0];
 }
 
+test "BNNN jump adding V0" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x58,
+        0xB4, 0xC3,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x58 + 0x4C3), cpu.pc);
+}
+
 /// CXNN: set VX to rand() & NN
 fn opRandom(self: Instruction, cpu: *CPU) !?u12 {
     cpu.V[self.regX] = cpu.rand.int(u8) & self.low8;
     return null;
+}
+
+test "CXNN random" {
+    var prng1 = std.rand.DefaultPrng.init(2387);
+    const rand1 = prng1.random();
+    var prng2 = std.rand.DefaultPrng.init(2387);
+    const rand2 = prng2.random();
+    var cpu = try CPU.init(&[_]u8{
+        0xC0, 0xFF,
+        0xC0, 0x07,
+        0xC0, 0x00,
+    }, rand1);
+    try cpu.cycle();
+    try std.testing.expectEqual(rand2.int(u8), cpu.V[0x0]);
+    try cpu.cycle();
+    try std.testing.expectEqual(rand2.int(u8) & 0x07, cpu.V[0x0]);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x00), cpu.V[0x0]);
 }
 
 /// DXYN: draw an 8xN sprite from memory starting at I at (VX, VY); set VF to 1 if any pixel was
