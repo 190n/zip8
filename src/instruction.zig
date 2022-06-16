@@ -21,6 +21,9 @@ low4: u4,
 /// full opcode, if needed for any reason
 opcode: u16,
 
+var prng = std.rand.DefaultPrng.init(1337);
+const testing_rand = prng.random();
+
 /// split up an opcode into useful parts
 pub fn decode(opcode: u16) Instruction {
     const nibbles = [4]u4{
@@ -78,7 +81,7 @@ const msd_opcodes = [16]OpcodeFn{
 };
 
 /// does nothing and returns IllegalOpcode, for use in arrays of function pointers
-pub fn opIllegal(self: Instruction, cpu: *const CPU) !?u12 {
+fn opIllegal(self: Instruction, cpu: *const CPU) !?u12 {
     _ = cpu;
     _ = self;
     return error.IllegalOpcode;
@@ -94,7 +97,7 @@ fn opIllegalArithmetic(vx: u8, vy: u8, vf: *const u8) !u8 {
 
 /// 00E0: clear the screen
 /// 00EE: return
-pub fn op00EX(self: Instruction, cpu: *CPU) !?u12 {
+fn op00EX(self: Instruction, cpu: *CPU) !?u12 {
     switch (self.opcode) {
         0x00E0 => {
             for (cpu.display) |*row| {
@@ -114,14 +117,58 @@ pub fn op00EX(self: Instruction, cpu: *CPU) !?u12 {
     }
 }
 
+test "00E0 clear screen" {
+    var cpu = try CPU.init(&[_]u8{
+        0x00, 0xE0,
+    }, testing_rand);
+    // fill screen
+    for (cpu.display) |*row| {
+        for (row) |*pixel| {
+            pixel.* = true;
+        }
+    }
+    try cpu.cycle();
+    for (cpu.display) |*row| {
+        for (row) |pixel| {
+            try std.testing.expectEqual(false, pixel);
+        }
+    }
+}
+
+test "00EE return" {
+    var cpu = try CPU.init(&[_]u8{
+        0x00, 0xEE, // return to 0x206
+        0x00, 0x00,
+        0x00, 0x00,
+        0x00, 0xEE, // return again but now the stack is empty
+    }, testing_rand);
+    // set up somewhere to return to
+    cpu.sp = 1;
+    cpu.stack[0] = 0x206;
+    try cpu.cycle();
+    // make sure it sent us to the right address and decremented the stack pointer
+    try std.testing.expectEqual(@as(u12, 0x206), cpu.pc);
+    try std.testing.expectEqual(@as(@TypeOf(cpu.sp), 0), cpu.sp);
+    // this should error as there's nothing on the stack anymore
+    try std.testing.expectError(error.BadReturn, cpu.cycle());
+}
+
 /// 1NNN: jump to NNN
-pub fn opJump(self: Instruction, cpu: *const CPU) !?u12 {
+fn opJump(self: Instruction, cpu: *const CPU) !?u12 {
     _ = cpu;
     return self.low12;
 }
 
+test "1NNN jump" {
+    var cpu = try CPU.init(&[_]u8{
+        0x15, 0x62, // jump to 0x562
+    }, testing_rand);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x562), cpu.pc);
+}
+
 /// 2NNN: call address NNN
-pub fn opCall(self: Instruction, cpu: *CPU) !?u12 {
+fn opCall(self: Instruction, cpu: *CPU) !?u12 {
     if (cpu.sp == CPU.stack_size) {
         return error.StackOverflow;
     } else {
@@ -131,43 +178,160 @@ pub fn opCall(self: Instruction, cpu: *CPU) !?u12 {
     }
 }
 
+test "2NNN call" {
+    // calls an instruction, then jumps back to the start (without returning)
+    var cpu = try CPU.init(&[_]u8{
+        0x22, 0x08, // 0x200: call 0x208
+        0x00, 0x00,
+        0x00, 0x00,
+        0x00, 0x00,
+        0x12, 0x00, // 0x208: jump back to 0x200
+    }, testing_rand);
+
+    var i: @TypeOf(cpu.sp) = 0;
+    // fill up the stack
+    while (i < CPU.stack_size) : (i += 1) {
+        // execute call
+        try cpu.cycle();
+        try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
+        try std.testing.expectEqual(i + 1, cpu.sp);
+        try std.testing.expectEqual(@as(u12, 0x200), cpu.stack[i]);
+        // execute jump
+        try cpu.cycle();
+    }
+    // now this one should fail
+    try std.testing.expectError(error.StackOverflow, cpu.cycle());
+}
+
 /// calculate the new PC, using condition as whether the next instruction should be skipped
 fn skipNextInstructionIf(cpu: *const CPU, condition: bool) u12 {
     return cpu.pc + @as(u12, if (condition) 4 else 2);
 }
 
 /// 3XNN: skip next instruction if VX == NN
-pub fn opSkipEqImm(self: Instruction, cpu: *const CPU) !?u12 {
+fn opSkipEqImm(self: Instruction, cpu: *const CPU) !?u12 {
     return skipNextInstructionIf(cpu, cpu.V[self.regX] == self.low8);
 }
 
+test "3XNN skip if VX == NN" {
+    var cpu = try CPU.init(&[_]u8{
+        0x63, 0x58, // V3 = 0x58
+        0x33, 0x58, // skip
+        0x00, 0x00, // skipped
+        0x33, 0x20, // won't skip
+        0x32, 0x58, // won't skip
+    }, testing_rand);
+
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x206), cpu.pc);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x20A), cpu.pc);
+}
+
 /// 4XNN: skip next instruction if VX != NN
-pub fn opSkipNeImm(self: Instruction, cpu: *const CPU) !?u12 {
+fn opSkipNeImm(self: Instruction, cpu: *const CPU) !?u12 {
     return skipNextInstructionIf(cpu, cpu.V[self.regX] != self.low8);
 }
 
+test "4XNN skip if VX != NN" {
+    var cpu = try CPU.init(&[_]u8{
+        0x63, 0x58, // V3 = 0x58
+        0x43, 0x20, // skip
+        0x00, 0x00, // skipped
+        0x43, 0x58, // won't skip
+        0x42, 0x58, // skip
+    }, testing_rand);
+
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x206), cpu.pc);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x20C), cpu.pc);
+}
+
 /// 5XY0: skip next instruction if VX == VY
-pub fn opSkipEqReg(self: Instruction, cpu: *const CPU) !?u12 {
+fn opSkipEqReg(self: Instruction, cpu: *const CPU) !?u12 {
     if (self.low4 != 0x0) {
         return error.IllegalOpcode;
     }
     return skipNextInstructionIf(cpu, cpu.V[self.regX] == cpu.V[self.regY]);
 }
 
+test "5XY0 skip if VX == VY" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x23, // V0 = 0x23
+        0x61, 0x23, // V1 = 0x23
+        0x50, 0x10, // skip
+        0x00, 0x00, // skipped
+        0x51, 0x00, // skip
+        0x00, 0x00, // skipped
+        0x50, 0x20, // won't skip
+        0x50, 0x11, // error
+    }, testing_rand);
+    // initialize registers
+    try cpu.cycle();
+    try cpu.cycle();
+    // testing skips
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x20C), cpu.pc);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x20E), cpu.pc);
+    try std.testing.expectError(error.IllegalOpcode, cpu.cycle());
+}
+
 /// 6XNN: set VX to NN
-pub fn opSetRegImm(self: Instruction, cpu: *CPU) !?u12 {
+fn opSetRegImm(self: Instruction, cpu: *CPU) !?u12 {
     cpu.V[self.regX] = self.low8;
     return null;
 }
 
+test "6XNN set VX to NN" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x2F,
+        0x61, 0x68,
+    }, testing_rand);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x2F), cpu.V[0x0]);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x68), cpu.V[0x1]);
+}
+
 /// 7XNN: add NN to VX without carry
-pub fn opAddImm(self: Instruction, cpu: *CPU) !?u12 {
+fn opAddImm(self: Instruction, cpu: *CPU) !?u12 {
     cpu.V[self.regX] +%= self.low8;
     return null;
 }
 
+test "7XNN add NN to VX" {
+    var cpu = try CPU.init(&[_]u8{
+        0x70, 0x53,
+        0x70, 0xFF,
+        0x71, 0x28,
+    }, testing_rand);
+    // V0 = 0x53
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x53), cpu.V[0x0]);
+    // always make sure carry flag not set
+    try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
+    // add 0xFF = subtract 1
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x52), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
+    // V1 = 0x28
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x28), cpu.V[0x1]);
+    try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
+}
+
 /// dispatch an arithmetic instruction beginning with 8
-pub fn opArithmetic(self: Instruction, cpu: *CPU) !?u12 {
+fn opArithmetic(self: Instruction, cpu: *CPU) !?u12 {
     // vx is set to the return value of this function
     const ArithmeticOpcodeFn = fn (vx: u8, vy: u8, vf: *u8) ExecutionError!u8;
     const arithmetic_opcodes = [_]ArithmeticOpcodeFn{
@@ -269,7 +433,7 @@ fn opShiftLeft(vx: u8, vy: u8, vf: *u8) !u8 {
 }
 
 /// 9XY0: skip next instruction if VX != VY
-pub fn opSkipNeReg(self: Instruction, cpu: *const CPU) !?u12 {
+fn opSkipNeReg(self: Instruction, cpu: *const CPU) !?u12 {
     if (self.low4 != 0x0) {
         return error.IllegalOpcode;
     }
@@ -277,25 +441,25 @@ pub fn opSkipNeReg(self: Instruction, cpu: *const CPU) !?u12 {
 }
 
 /// ANNN: set I to NNN
-pub fn opSetIImm(self: Instruction, cpu: *CPU) !?u12 {
+fn opSetIImm(self: Instruction, cpu: *CPU) !?u12 {
     cpu.I = self.low12;
     return null;
 }
 
 /// BNNN: jump to NNN + V0
-pub fn opJumpV0(self: Instruction, cpu: *const CPU) !?u12 {
+fn opJumpV0(self: Instruction, cpu: *const CPU) !?u12 {
     return self.low12 + cpu.V[0x0];
 }
 
 /// CXNN: set VX to rand() & NN
-pub fn opRandom(self: Instruction, cpu: *CPU) !?u12 {
+fn opRandom(self: Instruction, cpu: *CPU) !?u12 {
     cpu.V[self.regX] = cpu.rand.int(u8) & self.low8;
     return null;
 }
 
 /// DXYN: draw an 8xN sprite from memory starting at I at (VX, VY); set VF to 1 if any pixel was
 /// turned off, 0 otherwise
-pub fn opDraw(self: Instruction, cpu: *CPU) !?u12 {
+fn opDraw(self: Instruction, cpu: *CPU) !?u12 {
     cpu.V[0xF] = 0;
     const sprite: []const u8 = cpu.mem[(cpu.I)..(cpu.I + self.low4)];
     const x_start = cpu.V[self.regX] % CPU.display_width;
@@ -323,7 +487,7 @@ pub fn opDraw(self: Instruction, cpu: *CPU) !?u12 {
 
 /// EX9E: skip next instruction if the key in VX is pressed
 /// EXA1: skip next instruction if the key in VX is not pressed
-pub fn opInput(self: Instruction, cpu: *CPU) !?u12 {
+fn opInput(self: Instruction, cpu: *CPU) !?u12 {
     return switch (self.low8) {
         0x9E => skipNextInstructionIf(cpu, cpu.keys[cpu.V[self.regX]]),
         0xA1 => skipNextInstructionIf(cpu, !cpu.keys[cpu.V[self.regX]]),
@@ -332,7 +496,7 @@ pub fn opInput(self: Instruction, cpu: *CPU) !?u12 {
 }
 
 /// dispatch an instruction beginning with F
-pub fn opFXYZ(self: Instruction, cpu: *CPU) !?u12 {
+fn opFXYZ(self: Instruction, cpu: *CPU) !?u12 {
     const misc_opcode_fns = comptime blk: {
         var fns: [256]OpcodeFn = .{opIllegal} ** 256;
         fns[0x07] = opStoreDT;
