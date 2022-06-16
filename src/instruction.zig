@@ -360,11 +360,34 @@ fn opArithmetic(self: Instruction, cpu: *CPU) !?u12 {
     return null;
 }
 
+test "illegal arithmetic opcodes" {
+    for ([_]u8{ 0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xF }) |lsd| {
+        var cpu = try CPU.init(&[_]u8{
+            0x80, 0x10 | lsd,
+        }, testing_rand);
+        try std.testing.expectError(error.IllegalOpcode, cpu.cycle());
+    }
+}
+
 /// 8XY0: set VX to VY
 fn opSetRegReg(vx: u8, vy: u8, vf: *const u8) !u8 {
     _ = vx;
     _ = vf;
     return vy;
+}
+
+test "8XY0 set VX to VY" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x38,
+        0x81, 0x00,
+        0x80, 0x20,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x38), cpu.V[0x1]);
+    try std.testing.expectEqual(@as(u8, 0x38), cpu.V[0x0]);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x00), cpu.V[0x0]);
 }
 
 /// 8XY1: set VX to VX | VY
@@ -373,16 +396,55 @@ fn opOr(vx: u8, vy: u8, vf: *const u8) !u8 {
     return vx | vy;
 }
 
+test "8XY1 bitwise OR" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x55,
+        0x61, 0x33,
+        0x80, 0x11,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x77), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
+}
+
 /// 8XY2: set VX to VX & VY
 fn opAnd(vx: u8, vy: u8, vf: *const u8) !u8 {
     _ = vf;
     return vx & vy;
 }
 
+test "8XY2 bitwise AND" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x55,
+        0x61, 0x33,
+        0x80, 0x12,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x11), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
+}
+
 /// 8XY3: set VX to VX ^ VY
 fn opXor(vx: u8, vy: u8, vf: *const u8) !u8 {
     _ = vf;
     return vx ^ vy;
+}
+
+test "8XY3 bitwise XOR" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x55,
+        0x61, 0x33,
+        0x80, 0x13,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x66), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
 }
 
 /// 8XY4: set VX to VX + VY; set VF to 1 if carry occurred, 0 otherwise
@@ -396,6 +458,25 @@ fn opAdd(vx: u8, vy: u8, vf: *u8) !u8 {
     return new_vx;
 }
 
+test "8XY4 add registers" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 66,
+        0x61, 228,
+        0x80, 0x14,
+        0x61, 26,
+        0x80, 0x14,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@truncate(u8, 294), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 64), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
+}
+
 /// 8XY5: set VX to VX - VY; set VF to 0 if borrow occurred, 1 otherwise
 fn opSub(vx: u8, vy: u8, vf: *u8) !u8 {
     var new_vx = vx;
@@ -407,11 +488,47 @@ fn opSub(vx: u8, vy: u8, vf: *u8) !u8 {
     return new_vx;
 }
 
+test "8XY5 subtract registers" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 107,
+        0x61, 25,
+        0x80, 0x15,
+        0x60, 13,
+        0x61, 59,
+        0x80, 0x15,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@bitCast(u8, @truncate(i8, 13 - 59)), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
+}
+
 /// 8XY6: set VX to VY >> 1, set VF to the former least significant bit of VY
 fn opShiftRight(vx: u8, vy: u8, vf: *u8) !u8 {
     _ = vx;
     vf.* = vy & 0x01;
     return vy >> 1;
+}
+
+test "8XY6 shift right" {
+    var cpu = try CPU.init(&[_]u8{
+        0x61, 0b01011001,
+        0x80, 0x16,
+        0x80, 0x06,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0b00101100), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0b00010110), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
 }
 
 /// 8XY7: set VX to VY - VX; set VF to 0 if borrow occurred, 1 otherwise
@@ -425,11 +542,47 @@ fn opSubRev(vx: u8, vy: u8, vf: *u8) !u8 {
     return new_vx;
 }
 
+test "8XY7 subtract registers in reverse" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 25,
+        0x61, 107,
+        0x80, 0x17,
+        0x60, 59,
+        0x61, 13,
+        0x80, 0x17,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@bitCast(u8, @truncate(i8, 13 - 59)), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
+}
+
 /// 8XYE: set VX to VY << 1, set VF to the former most significant bit of VY
 fn opShiftLeft(vx: u8, vy: u8, vf: *u8) !u8 {
     _ = vx;
     vf.* = vy >> 7;
     return vy << 1;
+}
+
+test "8XYE shift left" {
+    var cpu = try CPU.init(&[_]u8{
+        0x61, 0b10010110,
+        0x80, 0x1E,
+        0x80, 0x0E,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0b00101100), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0b01011000), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
 }
 
 /// 9XY0: skip next instruction if VX != VY
