@@ -681,7 +681,7 @@ fn opDraw(self: Instruction, cpu: *CPU) !?u12 {
         var x_sprite: u4 = 0;
         while (x_sprite < 8) : (x_sprite += 1) {
             const mask = @as(u8, 0b10000000) >> @intCast(u3, x_sprite);
-            const pixel = (row & mask == 0);
+            const pixel = (row & mask != 0);
             const x = x_start + x_sprite;
             const y = y_start + y_sprite;
             if (x >= CPU.display_width or y >= CPU.display_height) {
@@ -696,6 +696,49 @@ fn opDraw(self: Instruction, cpu: *CPU) !?u12 {
         }
     }
     return null;
+}
+
+test "DXYN draw" {
+    const program = [_]u8{
+        0xA3, 0x00, // I = 0x300
+        0x60, 8, // V0 = 8
+        0x61, 17, // V1 = 17
+        0x6F, 0xFF, // VF = 0xFF (it should be cleared)
+        0xD0, 0x14, // draw 8x4 at (8, 17)
+    };
+    const sprites = [_]u8{
+        0b00110000, // 0x300
+        0b11000011,
+        0b11000011,
+        0b00001100,
+    };
+    // calculate padding so the sprites start at 0x300
+    const rom = program ++ ([1]u8{0} ** (0x100 - program.len)) ++ sprites;
+    var cpu = try CPU.init(&rom, testing_rand);
+
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    try cpu.cycle();
+    // VF should be cleared
+    try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
+    // print screen
+    for (cpu.display) |row| {
+        for (row) |pixel| {
+            const char: u8 = if (pixel) '#' else ' ';
+            std.debug.print("{c}", .{char});
+        }
+        std.debug.print("\n", .{});
+    }
+    // check the screen
+    for (sprites) |pixel, y| {
+        var x: u32 = 0;
+        while (x < 8) : (x += 1) {
+            const expected = (pixel & (@as(u8, 1) << @intCast(u3, 7 - x))) != 0;
+            try std.testing.expectEqual(expected, cpu.display[y + 17][x + 8]);
+        }
+    }
 }
 
 /// EX9E: skip next instruction if the key in VX is pressed
