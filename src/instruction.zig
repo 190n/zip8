@@ -705,6 +705,7 @@ test "DXYN draw" {
         0x61, 17, // V1 = 17
         0x6F, 0xFF, // VF = 0xFF (it should be cleared)
         0xD0, 0x14, // draw 8x4 at (8, 17)
+        0xD0, 0x14, // turn everything back off and set VF
     };
     const sprites = [_]u8{
         0b00110000, // 0x300
@@ -723,20 +724,22 @@ test "DXYN draw" {
     try cpu.cycle();
     // VF should be cleared
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
-    // print screen
-    for (cpu.display) |row| {
-        for (row) |pixel| {
-            const char: u8 = if (pixel) '#' else ' ';
-            std.debug.print("{c}", .{char});
-        }
-        std.debug.print("\n", .{});
-    }
     // check the screen
     for (sprites) |pixel, y| {
         var x: u32 = 0;
         while (x < 8) : (x += 1) {
             const expected = (pixel & (@as(u8, 1) << @intCast(u3, 7 - x))) != 0;
             try std.testing.expectEqual(expected, cpu.display[y + 17][x + 8]);
+        }
+    }
+
+    try cpu.cycle();
+    // now there was a collision
+    try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
+    // all off
+    for (cpu.display) |row| {
+        for (row) |pixel| {
+            try std.testing.expectEqual(false, pixel);
         }
     }
 }
