@@ -57,6 +57,17 @@ pub fn cycle(self: *CPU) !void {
     }
 }
 
+/// execute for N cycles, setting completed.* (if not null) to the number of cycles that actually
+/// ran
+pub fn cycleN(self: *CPU, n: usize, completed: ?*usize) !void {
+    var i: usize = 0;
+    if (completed) |ptr| ptr.* = 0;
+    while (i < n) : (i += 1) {
+        try self.cycle();
+        if (completed) |ptr| ptr.* += 1;
+    }
+}
+
 test "CPU.init" {
     const cpu = try CPU.init("abc", undefined);
     try std.testing.expectEqualSlices(u8, &(.{0} ** 16), &cpu.V);
@@ -100,4 +111,24 @@ test "CPU.cycle with a basic program" {
         try cpu.cycle();
         try std.testing.expectEqual(@as(u12, cpu.pc), 0x206);
     }
+}
+
+test "CPU.cycleN" {
+    var cpu = try CPU.init(&[_]u8{
+        // NOPs
+        0x70, 0x00,
+        0x70, 0x00,
+        0x70, 0x00,
+        0x70, 0x00,
+        0x70, 0x00,
+        // illegal
+        0x00, 0x00,
+    }, undefined);
+
+    var completed: usize = 0;
+    try cpu.cycleN(2, &completed);
+    try std.testing.expectEqual(@as(usize, 2), completed);
+    try cpu.cycleN(2, null);
+    try std.testing.expectError(error.IllegalOpcode, cpu.cycleN(2, &completed));
+    try std.testing.expectEqual(@as(usize, 1), completed);
 }
