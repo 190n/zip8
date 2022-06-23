@@ -402,9 +402,7 @@ test "8XY1 bitwise OR" {
         0x61, 0x33,
         0x80, 0x11,
     }, testing_rand);
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
+    try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0x77), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
 }
@@ -421,9 +419,7 @@ test "8XY2 bitwise AND" {
         0x61, 0x33,
         0x80, 0x12,
     }, testing_rand);
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
+    try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0x11), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
 }
@@ -440,9 +436,7 @@ test "8XY3 bitwise XOR" {
         0x61, 0x33,
         0x80, 0x13,
     }, testing_rand);
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
+    try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0x66), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
 }
@@ -466,13 +460,10 @@ test "8XY4 add registers" {
         0x61, 26,
         0x80, 0x14,
     }, testing_rand);
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
+    try cpu.cycleN(3, null);
     try std.testing.expectEqual(@truncate(u8, 294), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
-    try cpu.cycle();
-    try cpu.cycle();
+    try cpu.cycleN(2, null);
     try std.testing.expectEqual(@as(u8, 64), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
 }
@@ -497,14 +488,10 @@ test "8XY5 subtract registers" {
         0x61, 59,
         0x80, 0x15,
     }, testing_rand);
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
+    try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
+    try cpu.cycleN(3, null);
     try std.testing.expectEqual(@bitCast(u8, @truncate(i8, 13 - 59)), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
 }
@@ -551,14 +538,10 @@ test "8XY7 subtract registers in reverse" {
         0x61, 13,
         0x80, 0x17,
     }, testing_rand);
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
+    try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
+    try cpu.cycleN(3, null);
     try std.testing.expectEqual(@bitCast(u8, @truncate(i8, 13 - 59)), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
 }
@@ -717,11 +700,7 @@ test "DXYN draw" {
     const rom = program ++ ([1]u8{0} ** (0x100 - program.len)) ++ sprites;
     var cpu = try CPU.init(&rom, testing_rand);
 
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
-    try cpu.cycle();
+    try cpu.cycleN(5, null);
     // VF should be cleared
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
     // check the screen
