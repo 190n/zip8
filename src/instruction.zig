@@ -803,6 +803,13 @@ fn opStoreDT(self: Instruction, cpu: *CPU) !?u12 {
     return null;
 }
 
+test "FX07 get DT" {
+    var cpu = try CPU.init(&[_]u8{ 0xF0, 0x07 }, testing_rand);
+    cpu.dt = 30;
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 30), cpu.V[0x0]);
+}
+
 /// FX0A: wait until any key is pressed, then store the key that was pressed in VX
 fn opWaitForKey(self: Instruction, cpu: *CPU) !?u12 {
     _ = cpu;
@@ -816,10 +823,30 @@ fn opSetDT(self: Instruction, cpu: *CPU) !?u12 {
     return null;
 }
 
+test "FX15 set DT" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x10,
+        0xF0, 0x15,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x10), cpu.dt);
+}
+
 /// FX18: set the sound timer to the value of VX
 fn opSetST(self: Instruction, cpu: *CPU) !?u12 {
     cpu.st = cpu.V[self.regX];
     return null;
+}
+
+test "FX18 set ST" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x10,
+        0xF0, 0x18,
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u8, 0x10), cpu.st);
 }
 
 /// FX1E: increment I by the value of VX
@@ -828,10 +855,35 @@ fn opIncIReg(self: Instruction, cpu: *CPU) !?u12 {
     return null;
 }
 
+test "FX1E increment I by register" {
+    var cpu = try CPU.init(&[_]u8{
+        0xA5, 0x00, // I = 0x500
+        0x63, 0x1F, // V3 = 0x1F
+        0xF3, 0x1E, // I += V3
+        0xAF, 0xFF, // I = 0xFFF
+        0x62, 0x02, // V2 = 0x02
+        0xF2, 0x1E, // I += V2 (overflows)
+    }, testing_rand);
+    try cpu.cycleN(3, null);
+    try std.testing.expectEqual(@as(u12, 0x51F), cpu.I);
+    try cpu.cycleN(3, null);
+    try std.testing.expectEqual(@as(u12, 0x001), cpu.I);
+}
+
 /// FX29: set I to the address of the sprite for the digit in VX
 fn opSetISprite(self: Instruction, cpu: *CPU) !?u12 {
-    cpu.I = CPU.font_base_address + (@truncate(u4, cpu.V[self.regX]) * CPU.font_character_size);
+    cpu.I = CPU.font_base_address + (@as(u12, @truncate(u4, cpu.V[self.regX])) * CPU.font_character_size);
     return null;
+}
+
+test "FX29 get address of font" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x3A, // V0 = 0x3A
+        0xF0, 0x29, // get that character
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, CPU.font_base_address + 0xA * CPU.font_character_size), cpu.I);
 }
 
 /// FX33: store the binary-coded decimal version of the value of VX in I, I + 1, and I + 2
@@ -841,6 +893,18 @@ fn opStoreBCD(self: Instruction, cpu: *CPU) !?u12 {
     cpu.mem[cpu.I + 1] = (value / 10) % 10;
     cpu.mem[cpu.I + 2] = value % 10;
     return null;
+}
+
+test "FX33 store BCD" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 83, // V0 = 83
+        0xA3, 0x00, // I = 0x300
+        0xF0, 0x33, // store BCD of V0
+    }, testing_rand);
+    try cpu.cycleN(3, null);
+    try std.testing.expectEqual(@as(u8, 0), cpu.mem[0x300]);
+    try std.testing.expectEqual(@as(u8, 8), cpu.mem[0x301]);
+    try std.testing.expectEqual(@as(u8, 3), cpu.mem[0x302]);
 }
 
 /// FX55: store registers [V0, VX] in memory starting at I; set I to I + X + 1
@@ -853,7 +917,30 @@ fn opStore(self: Instruction, cpu: *CPU) !?u12 {
     return null;
 }
 
-/// FX65: load values from memory starting at I into registers [V0, Vx]; set I to I + X + 1
+test "FX55 store registers" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 5,
+        0x61, 4,
+        0x62, 3,
+        0x63, 2,
+        0x64, 1,
+        0x65, 0xFF, // make sure this is *not* stored
+        0xA4, 0x00, // I = 0x400
+        0xF4, 0x55,
+    }, testing_rand);
+    try cpu.cycleN(8, null);
+    try std.testing.expectEqual(@as(u12, 0x405), cpu.I);
+    var addr: u12 = 0x400;
+    var val: i8 = 5;
+    while (val >= 0) : ({
+        val -= 1;
+        addr += 1;
+    }) {
+        try std.testing.expectEqual(@intCast(u8, val), cpu.mem[addr]);
+    }
+}
+
+/// FX65: load values from memory starting at I into registers [V0, VX]; set I to I + X + 1
 fn opLoad(self: Instruction, cpu: *CPU) !?u12 {
     var offset: u5 = 0;
     while (offset <= self.regX) : (offset += 1) {
@@ -861,4 +948,24 @@ fn opLoad(self: Instruction, cpu: *CPU) !?u12 {
         cpu.I += 1;
     }
     return null;
+}
+
+test "FX65 load registers" {
+    var cpu = try CPU.init(&[_]u8{
+        0xA2, 0x04, // set I
+        0xF4, 0x65, // load them
+        5, 4, 3, 2, 1, // data to load
+        0xFF, // do not load
+    }, testing_rand);
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x209), cpu.I);
+    var reg: u4 = 0x0;
+    var val: i8 = 5;
+    while (val >= 0) : ({
+        val -= 1;
+        reg += 1;
+    }) {
+        try std.testing.expectEqual(@intCast(u8, val), cpu.V[reg]);
+    }
 }
