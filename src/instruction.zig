@@ -754,6 +754,51 @@ fn opInput(self: Instruction, cpu: *CPU) !?u12 {
     };
 }
 
+test "illegal EXYZ opcodes" {
+    var low8: u32 = 0x00;
+    while (low8 < 0xFF) : (low8 += 1) {
+        if (low8 != 0x9E and low8 != 0xA1) {
+            var cpu = try CPU.init(&[_]u8{
+                0xE0, @intCast(u8, low8),
+            }, testing_rand);
+            try std.testing.expectError(error.IllegalOpcode, cpu.cycle());
+        }
+    }
+}
+
+test "EX9E skip if pressed" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x05, // check key 5
+        0xE0, 0x9E, // skip if 5 pressed (yes)
+        0x00, 0x00, // skipped
+        0xE1, 0x9E, // skip if 0 pressed (V1 still zeroed) (no)
+    }, testing_rand);
+    cpu.keys[5] = true;
+    try cpu.cycle();
+    try cpu.cycle();
+    // should skip
+    try std.testing.expectEqual(@as(u12, 0x206), cpu.pc);
+    try cpu.cycle();
+    // should not skip
+    try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
+}
+
+test "EXA1 skip if not pressed" {
+    var cpu = try CPU.init(&[_]u8{
+        0x60, 0x05, // check key 5
+        0xE0, 0xA1, // skip if 5 not pressed (no)
+        0xE1, 0xA1, // skip if 0 not pressed (V1 still zeroed) (yes)
+    }, testing_rand);
+    cpu.keys[5] = true;
+    try cpu.cycle();
+    try cpu.cycle();
+    // should not skip
+    try std.testing.expectEqual(@as(u12, 0x204), cpu.pc);
+    try cpu.cycle();
+    // should skip
+    try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
+}
+
 /// dispatch an instruction beginning with F
 fn opFXYZ(self: Instruction, cpu: *CPU) !?u12 {
     const misc_opcode_fns = comptime blk: {
