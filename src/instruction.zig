@@ -172,7 +172,8 @@ fn opCall(self: Instruction, cpu: *CPU) !?u12 {
     if (cpu.sp == CPU.stack_size) {
         return error.StackOverflow;
     } else {
-        cpu.stack[cpu.sp] = cpu.pc;
+        // increment by 2 so that it returns to the instruction after the call
+        cpu.stack[cpu.sp] = cpu.pc + 2;
         cpu.sp += 1;
         return self.low12;
     }
@@ -195,7 +196,7 @@ test "2NNN call" {
         try cpu.cycle();
         try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
         try std.testing.expectEqual(i + 1, cpu.sp);
-        try std.testing.expectEqual(@as(u12, 0x200), cpu.stack[i]);
+        try std.testing.expectEqual(@as(u12, 0x202), cpu.stack[i]);
         // execute jump
         try cpu.cycle();
     }
