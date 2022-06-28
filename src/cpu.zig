@@ -21,9 +21,7 @@ mem: [memory_size]u8 = .{0} ** memory_size,
 /// program counter
 pc: u12 = initial_pc,
 /// call stack
-stack: [stack_size]u12 = .{0} ** stack_size,
-/// which index of the call stack will be used next
-sp: std.math.IntFittingRange(0, stack_size) = 0,
+stack: std.BoundedArray(u12, 16),
 /// random number generator to use
 rand: std.rand.Random,
 
@@ -39,7 +37,7 @@ st: u8 = 0,
 
 /// initialize a CPU and copy the program into memory
 pub fn init(program: []const u8, rand: std.rand.Random) error{ProgramTooLong}!CPU {
-    var cpu = CPU{ .rand = rand };
+    var cpu = CPU{ .rand = rand, .stack = std.BoundedArray(u12, stack_size).init(0) catch unreachable };
     if (program.len > (memory_size - initial_pc)) {
         return error.ProgramTooLong;
     }
@@ -75,8 +73,7 @@ test "CPU.init" {
     // should be the program then a bunch of zeros
     try std.testing.expectEqualSlices(u8, "abc" ++ ([_]u8{0} ** (memory_size - initial_pc - 3)), cpu.mem[initial_pc..]);
     try std.testing.expectEqual(@as(u12, initial_pc), cpu.pc);
-    try std.testing.expectEqualSlices(u12, &(.{0} ** stack_size), &cpu.stack);
-    try std.testing.expectEqual(@as(@TypeOf(cpu.sp), 0), cpu.sp);
+    try std.testing.expectEqual(@as(usize, 0), cpu.stack.len);
 
     for (cpu.display) |row| {
         for (row) |pixel| {

@@ -106,11 +106,10 @@ fn op00EX(self: Instruction, cpu: *CPU) !?u12 {
             return null;
         },
         0x00EE => {
-            if (cpu.sp == 0) {
-                return error.BadReturn;
+            if (cpu.stack.popOrNull()) |return_address| {
+                return return_address;
             } else {
-                cpu.sp -= 1;
-                return cpu.stack[cpu.sp];
+                return error.BadReturn;
             }
         },
         else => return error.IllegalOpcode,
@@ -143,12 +142,11 @@ test "00EE return" {
         0x00, 0xEE, // return again but now the stack is empty
     }, testing_rand);
     // set up somewhere to return to
-    cpu.sp = 1;
-    cpu.stack[0] = 0x206;
+    try cpu.stack.append(0x206);
     try cpu.cycle();
     // make sure it sent us to the right address and decremented the stack pointer
     try std.testing.expectEqual(@as(u12, 0x206), cpu.pc);
-    try std.testing.expectEqual(@as(@TypeOf(cpu.sp), 0), cpu.sp);
+    try std.testing.expectEqual(@as(usize, 0), cpu.stack.len);
     // this should error as there's nothing on the stack anymore
     try std.testing.expectError(error.BadReturn, cpu.cycle());
 }
@@ -169,14 +167,9 @@ test "1NNN jump" {
 
 /// 2NNN: call address NNN
 fn opCall(self: Instruction, cpu: *CPU) !?u12 {
-    if (cpu.sp == CPU.stack_size) {
-        return error.StackOverflow;
-    } else {
-        // increment by 2 so that it returns to the instruction after the call
-        cpu.stack[cpu.sp] = cpu.pc + 2;
-        cpu.sp += 1;
-        return self.low12;
-    }
+    const return_address = cpu.pc + 2;
+    cpu.stack.append(return_address) catch return error.StackOverflow;
+    return self.low12;
 }
 
 test "2NNN call" {
@@ -189,14 +182,14 @@ test "2NNN call" {
         0x12, 0x00, // 0x208: jump back to 0x200
     }, testing_rand);
 
-    var i: @TypeOf(cpu.sp) = 0;
+    var i: usize = 0;
     // fill up the stack
     while (i < CPU.stack_size) : (i += 1) {
         // execute call
         try cpu.cycle();
         try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
-        try std.testing.expectEqual(i + 1, cpu.sp);
-        try std.testing.expectEqual(@as(u12, 0x202), cpu.stack[i]);
+        try std.testing.expectEqual(i + 1, cpu.stack.len);
+        try std.testing.expectEqual(@as(u12, 0x202), cpu.stack.get(i));
         // execute jump
         try cpu.cycle();
     }
