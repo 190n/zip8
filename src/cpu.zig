@@ -26,7 +26,7 @@ stack: std.BoundedArray(u12, 16),
 rand: std.rand.Random,
 
 /// display is 64x32 stored row-major
-display: [display_height][display_width]bool = .{.{false} ** display_width} ** display_height,
+display: [display_height][display_width]bool = std.mem.zeroes([display_height][display_width]bool),
 /// whether each key 0-F is pressed
 keys: [16]bool = .{false} ** 16,
 
