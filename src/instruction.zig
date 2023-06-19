@@ -44,6 +44,18 @@ pub fn decode(opcode: u16) Instruction {
     };
 }
 
+test "Instruction.decode" {
+    const ins = Instruction.decode(0x1234);
+    try std.testing.expectEqual([_]u4{ 0x1, 0x2, 0x3, 0x4 }, ins.nibbles);
+    try std.testing.expectEqual(@as(u8, 0x34), ins.low8);
+    try std.testing.expectEqual(@as(u12, 0x234), ins.low12);
+    try std.testing.expectEqual(@as(u4, 0x1), ins.high4);
+    try std.testing.expectEqual(@as(u4, 0x2), ins.regX);
+    try std.testing.expectEqual(@as(u4, 0x3), ins.regY);
+    try std.testing.expectEqual(@as(u4, 0x4), ins.low4);
+    try std.testing.expectEqual(@as(u16, 0x1234), ins.opcode);
+}
+
 /// execute an instruction, returning the new program counter if execution should go somewhere other
 /// than the next instruction
 pub fn exec(self: Instruction, cpu: *CPU) ExecutionError!?u12 {
@@ -58,7 +70,7 @@ pub const ExecutionError = error{
 };
 
 /// a function that executes an instruction and optionally returns the new program counter
-const OpcodeFn = fn (self: Instruction, cpu: *CPU) ExecutionError!?u12;
+const OpcodeFn = *const fn (self: Instruction, cpu: *CPU) ExecutionError!?u12;
 
 /// functions that delegate opcodes by the most significant hex digit
 const msd_opcodes = [16]OpcodeFn{
@@ -100,8 +112,8 @@ fn opIllegalArithmetic(vx: u8, vy: u8, vf: *const u8) !u8 {
 fn op00EX(self: Instruction, cpu: *CPU) !?u12 {
     switch (self.opcode) {
         0x00E0 => {
-            for (cpu.display) |*row| {
-                std.mem.set(bool, row, false);
+            for (&cpu.display) |*row| {
+                @memset(row, false);
             }
             return null;
         },
@@ -121,13 +133,13 @@ test "00E0 clear screen" {
         0x00, 0xE0,
     }, testing_rand);
     // fill screen
-    for (cpu.display) |*row| {
+    for (&cpu.display) |*row| {
         for (row) |*pixel| {
             pixel.* = true;
         }
     }
     try cpu.cycle();
-    for (cpu.display) |*row| {
+    for (&cpu.display) |*row| {
         for (row) |pixel| {
             try std.testing.expectEqual(false, pixel);
         }
@@ -182,9 +194,8 @@ test "2NNN call" {
         0x12, 0x00, // 0x208: jump back to 0x200
     }, testing_rand);
 
-    var i: usize = 0;
     // fill up the stack
-    while (i < CPU.stack_size) : (i += 1) {
+    for (0..CPU.stack_size) |i| {
         // execute call
         try cpu.cycle();
         try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
@@ -327,7 +338,7 @@ test "7XNN add NN to VX" {
 /// dispatch an arithmetic instruction beginning with 8
 fn opArithmetic(self: Instruction, cpu: *CPU) !?u12 {
     // vx is set to the return value of this function
-    const ArithmeticOpcodeFn = fn (vx: u8, vy: u8, vf: *u8) ExecutionError!u8;
+    const ArithmeticOpcodeFn = *const fn (vx: u8, vy: u8, vf: *u8) ExecutionError!u8;
     const arithmetic_opcodes = [_]ArithmeticOpcodeFn{
         opSetRegReg, // 8XY0
         opOr, // 8XY1
@@ -437,13 +448,9 @@ test "8XY3 bitwise XOR" {
 
 /// 8XY4: set VX to VX + VY; set VF to 1 if carry occurred, 0 otherwise
 fn opAdd(vx: u8, vy: u8, vf: *u8) !u8 {
-    var new_vx = vx;
-    if (@addWithOverflow(u8, vx, vy, &new_vx)) {
-        vf.* = 1;
-    } else {
-        vf.* = 0;
-    }
-    return new_vx;
+    const result = @addWithOverflow(vx, vy);
+    vf.* = result[1];
+    return result[0];
 }
 
 test "8XY4 add registers" {
@@ -464,13 +471,9 @@ test "8XY4 add registers" {
 
 /// 8XY5: set VX to VX - VY; set VF to 0 if borrow occurred, 1 otherwise
 fn opSub(vx: u8, vy: u8, vf: *u8) !u8 {
-    var new_vx = vx;
-    if (@subWithOverflow(u8, vx, vy, &new_vx)) {
-        vf.* = 0;
-    } else {
-        vf.* = 1;
-    }
-    return new_vx;
+    const result = @subWithOverflow(vx, vy);
+    vf.* = 1 - result[1];
+    return result[0];
 }
 
 test "8XY5 subtract registers" {
@@ -514,13 +517,9 @@ test "8XY6 shift right" {
 
 /// 8XY7: set VX to VY - VX; set VF to 0 if borrow occurred, 1 otherwise
 fn opSubRev(vx: u8, vy: u8, vf: *u8) !u8 {
-    var new_vx = vx;
-    if (@subWithOverflow(u8, vy, vx, &new_vx)) {
-        vf.* = 0;
-    } else {
-        vf.* = 1;
-    }
-    return new_vx;
+    const result = @subWithOverflow(vy, vx);
+    vf.* = 1 - result[1];
+    return result[0];
 }
 
 test "8XY7 subtract registers in reverse" {
@@ -654,9 +653,8 @@ fn opDraw(self: Instruction, cpu: *CPU) !?u12 {
     const sprite: []const u8 = cpu.mem[(cpu.I)..(cpu.I + self.low4)];
     const x_start = cpu.V[self.regX] % CPU.display_width;
     const y_start = cpu.V[self.regY] % CPU.display_height;
-    for (sprite) |row, y_sprite| {
-        var x_sprite: u4 = 0;
-        while (x_sprite < 8) : (x_sprite += 1) {
+    for (sprite, 0..) |row, y_sprite| {
+        for (0..8) |x_sprite| {
             const mask = @as(u8, 0b10000000) >> @intCast(u3, x_sprite);
             const pixel = (row & mask != 0);
             const x = x_start + x_sprite;
@@ -698,9 +696,8 @@ test "DXYN draw" {
     // VF should be cleared
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
     // check the screen
-    for (sprites) |pixel, y| {
-        var x: u32 = 0;
-        while (x < 8) : (x += 1) {
+    for (sprites, 0..) |pixel, y| {
+        for (0..8) |x| {
             const expected = (pixel & (@as(u8, 1) << @intCast(u3, 7 - x))) != 0;
             try std.testing.expectEqual(expected, cpu.display[y + 17][x + 8]);
         }
@@ -728,8 +725,7 @@ fn opInput(self: Instruction, cpu: *CPU) !?u12 {
 }
 
 test "illegal EXYZ opcodes" {
-    var low8: u32 = 0x00;
-    while (low8 < 0xFF) : (low8 += 1) {
+    for (0x00..0xFF) |low8| {
         if (low8 != 0x9E and low8 != 0xA1) {
             var cpu = try CPU.init(&[_]u8{
                 0xE0, @intCast(u8, low8),
@@ -903,8 +899,7 @@ test "FX33 store BCD" {
 
 /// FX55: store registers [V0, VX] in memory starting at I; set I to I + X + 1
 fn opStore(self: Instruction, cpu: *CPU) !?u12 {
-    var offset: u5 = 0;
-    while (offset <= self.regX) : (offset += 1) {
+    for (0..(self.regX + 1)) |offset| {
         cpu.mem[cpu.I] = cpu.V[offset];
         cpu.I += 1;
     }
@@ -924,20 +919,17 @@ test "FX55 store registers" {
     }, testing_rand);
     try cpu.cycleN(8, null);
     try std.testing.expectEqual(@as(u12, 0x405), cpu.I);
-    var addr: u12 = 0x400;
-    var val: i8 = 5;
-    while (val >= 0) : ({
-        val -= 1;
-        addr += 1;
-    }) {
+    for (0..5) |i| {
+        const addr = 0x400 + i;
+        const val = 5 - i;
         try std.testing.expectEqual(@intCast(u8, val), cpu.mem[addr]);
     }
+    try std.testing.expectEqual(@as(u8, 0), cpu.mem[0x405]);
 }
 
 /// FX65: load values from memory starting at I into registers [V0, VX]; set I to I + X + 1
 fn opLoad(self: Instruction, cpu: *CPU) !?u12 {
-    var offset: u5 = 0;
-    while (offset <= self.regX) : (offset += 1) {
+    for (0..(self.regX + 1)) |offset| {
         cpu.V[offset] = cpu.mem[cpu.I];
         cpu.I += 1;
     }
@@ -954,12 +946,9 @@ test "FX65 load registers" {
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, 0x209), cpu.I);
-    var reg: u4 = 0x0;
-    var val: i8 = 5;
-    while (val >= 0) : ({
-        val -= 1;
-        reg += 1;
-    }) {
-        try std.testing.expectEqual(@intCast(u8, val), cpu.V[reg]);
+    for (0..5) |i| {
+        const val = 5 - i;
+        try std.testing.expectEqual(@intCast(u8, val), cpu.V[i]);
     }
+    try std.testing.expectEqual(@as(u8, 0), cpu.V[0x5]);
 }
