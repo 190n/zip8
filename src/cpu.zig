@@ -1,4 +1,4 @@
-const CPU = @This();
+const Cpu = @This();
 
 const std = @import("std");
 
@@ -36,8 +36,8 @@ dt: u8 = 0,
 st: u8 = 0,
 
 /// initialize a CPU and copy the program into memory
-pub fn init(program: []const u8, rand: std.rand.Random) error{ProgramTooLong}!CPU {
-    var cpu = CPU{ .rand = rand, .stack = std.BoundedArray(u12, stack_size).init(0) catch unreachable };
+pub fn init(program: []const u8, rand: std.rand.Random) error{ProgramTooLong}!Cpu {
+    var cpu = Cpu{ .rand = rand, .stack = std.BoundedArray(u12, stack_size).init(0) catch unreachable };
     if (program.len > (memory_size - initial_pc)) {
         return error.ProgramTooLong;
     }
@@ -45,7 +45,7 @@ pub fn init(program: []const u8, rand: std.rand.Random) error{ProgramTooLong}!CP
     return cpu;
 }
 
-pub fn cycle(self: *CPU) !void {
+pub fn cycle(self: *Cpu) !void {
     const opcode: u16 = (@as(u16, self.mem[self.pc]) << 8) | self.mem[self.pc + 1];
     const inst = Instruction.decode(opcode);
     if (try inst.exec(self)) |new_pc| {
@@ -57,7 +57,7 @@ pub fn cycle(self: *CPU) !void {
 
 /// execute for N cycles, setting completed.* (if not null) to the number of cycles that actually
 /// ran
-pub fn cycleN(self: *CPU, n: usize, completed: ?*usize) !void {
+pub fn cycleN(self: *Cpu, n: usize, completed: ?*usize) !void {
     var i: usize = 0;
     if (completed) |ptr| ptr.* = 0;
     while (i < n) : (i += 1) {
@@ -66,8 +66,8 @@ pub fn cycleN(self: *CPU, n: usize, completed: ?*usize) !void {
     }
 }
 
-test "CPU.init" {
-    const cpu = try CPU.init("abc", undefined);
+test "Cpu.init" {
+    const cpu = try Cpu.init("abc", undefined);
     try std.testing.expectEqualSlices(u8, &(.{0} ** 16), &cpu.V);
     try std.testing.expectEqual(@as(u12, 0), cpu.I);
     // should be the program then a bunch of zeros
@@ -83,17 +83,17 @@ test "CPU.init" {
 
     try std.testing.expectEqualSlices(bool, &(.{false} ** 16), &cpu.keys);
 
-    try std.testing.expectError(error.ProgramTooLong, CPU.init(&(.{0} ** (memory_size - initial_pc + 1)), undefined));
+    try std.testing.expectError(error.ProgramTooLong, Cpu.init(&(.{0} ** (memory_size - initial_pc + 1)), undefined));
 }
 
-test "CPU.cycle with a basic program" {
+test "Cpu.cycle with a basic program" {
     const program = [_]u8{
         0x60, 0xC0, // V0 = 0xC0
         0x61, 0x53, // V1 = 0x53
         0x80, 0x14, // V0 += V1 (0x13 with carry)
         0x12, 0x06, // jump to 0x206 (infinite loop)
     };
-    var cpu = try CPU.init(&program, undefined);
+    var cpu = try Cpu.init(&program, undefined);
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0xC0), cpu.V[0x0]);
     try cpu.cycle();
@@ -110,8 +110,8 @@ test "CPU.cycle with a basic program" {
     }
 }
 
-test "CPU.cycleN" {
-    var cpu = try CPU.init(&[_]u8{
+test "Cpu.cycleN" {
+    var cpu = try Cpu.init(&[_]u8{
         // NOPs
         0x70, 0x00,
         0x70, 0x00,

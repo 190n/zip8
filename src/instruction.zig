@@ -2,7 +2,7 @@ const Instruction = @This();
 
 const std = @import("std");
 
-const CPU = @import("./cpu.zig");
+const Cpu = @import("./cpu.zig");
 
 /// 4-bit elements of opcode, most significant first
 nibbles: [4]u4,
@@ -27,15 +27,15 @@ const testing_rand = prng.random();
 /// split up an opcode into useful parts
 pub fn decode(opcode: u16) Instruction {
     const nibbles = [4]u4{
-        @truncate(u4, opcode >> 12),
-        @truncate(u4, opcode >> 8),
-        @truncate(u4, opcode >> 4),
-        @truncate(u4, opcode >> 0),
+        @as(u4, @truncate(opcode >> 12)),
+        @as(u4, @truncate(opcode >> 8)),
+        @as(u4, @truncate(opcode >> 4)),
+        @as(u4, @truncate(opcode >> 0)),
     };
     return .{
         .nibbles = nibbles,
-        .low8 = @truncate(u8, opcode),
-        .low12 = @truncate(u12, opcode),
+        .low8 = @as(u8, @truncate(opcode)),
+        .low12 = @as(u12, @truncate(opcode)),
         .high4 = nibbles[0],
         .regX = nibbles[1],
         .regY = nibbles[2],
@@ -58,7 +58,7 @@ test "Instruction.decode" {
 
 /// execute an instruction, returning the new program counter if execution should go somewhere other
 /// than the next instruction
-pub fn exec(self: Instruction, cpu: *CPU) ExecutionError!?u12 {
+pub fn exec(self: Instruction, cpu: *Cpu) ExecutionError!?u12 {
     return msd_opcodes[self.high4](self, cpu);
 }
 
@@ -70,7 +70,7 @@ pub const ExecutionError = error{
 };
 
 /// a function that executes an instruction and optionally returns the new program counter
-const OpcodeFn = *const fn (self: Instruction, cpu: *CPU) ExecutionError!?u12;
+const OpcodeFn = *const fn (self: Instruction, cpu: *Cpu) ExecutionError!?u12;
 
 /// functions that delegate opcodes by the most significant hex digit
 const msd_opcodes = [16]OpcodeFn{
@@ -93,7 +93,7 @@ const msd_opcodes = [16]OpcodeFn{
 };
 
 /// does nothing and returns IllegalOpcode, for use in arrays of function pointers
-fn opIllegal(self: Instruction, cpu: *const CPU) !?u12 {
+fn opIllegal(self: Instruction, cpu: *const Cpu) !?u12 {
     _ = cpu;
     _ = self;
     return error.IllegalOpcode;
@@ -109,7 +109,7 @@ fn opIllegalArithmetic(vx: u8, vy: u8, vf: *const u8) !u8 {
 
 /// 00E0: clear the screen
 /// 00EE: return
-fn op00EX(self: Instruction, cpu: *CPU) !?u12 {
+fn op00EX(self: Instruction, cpu: *Cpu) !?u12 {
     switch (self.opcode) {
         0x00E0 => {
             for (&cpu.display) |*row| {
@@ -129,7 +129,7 @@ fn op00EX(self: Instruction, cpu: *CPU) !?u12 {
 }
 
 test "00E0 clear screen" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x00, 0xE0,
     }, testing_rand);
     // fill screen
@@ -147,7 +147,7 @@ test "00E0 clear screen" {
 }
 
 test "00EE return" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x00, 0xEE, // return to 0x206
         0x00, 0x00,
         0x00, 0x00,
@@ -164,13 +164,13 @@ test "00EE return" {
 }
 
 /// 1NNN: jump to NNN
-fn opJump(self: Instruction, cpu: *const CPU) !?u12 {
+fn opJump(self: Instruction, cpu: *const Cpu) !?u12 {
     _ = cpu;
     return self.low12;
 }
 
 test "1NNN jump" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x15, 0x62, // jump to 0x562
     }, testing_rand);
     try cpu.cycle();
@@ -178,7 +178,7 @@ test "1NNN jump" {
 }
 
 /// 2NNN: call address NNN
-fn opCall(self: Instruction, cpu: *CPU) !?u12 {
+fn opCall(self: Instruction, cpu: *Cpu) !?u12 {
     const return_address = cpu.pc + 2;
     cpu.stack.append(return_address) catch return error.StackOverflow;
     return self.low12;
@@ -186,7 +186,7 @@ fn opCall(self: Instruction, cpu: *CPU) !?u12 {
 
 test "2NNN call" {
     // calls an instruction, then jumps back to the start (without returning)
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x22, 0x08, // 0x200: call 0x208
         0x00, 0x00,
         0x00, 0x00,
@@ -195,7 +195,7 @@ test "2NNN call" {
     }, testing_rand);
 
     // fill up the stack
-    for (0..CPU.stack_size) |i| {
+    for (0..Cpu.stack_size) |i| {
         // execute call
         try cpu.cycle();
         try std.testing.expectEqual(@as(u12, 0x208), cpu.pc);
@@ -209,17 +209,17 @@ test "2NNN call" {
 }
 
 /// calculate the new PC, using condition as whether the next instruction should be skipped
-fn skipNextInstructionIf(cpu: *const CPU, condition: bool) u12 {
+fn skipNextInstructionIf(cpu: *const Cpu, condition: bool) u12 {
     return cpu.pc + @as(u12, if (condition) 4 else 2);
 }
 
 /// 3XNN: skip next instruction if VX == NN
-fn opSkipEqImm(self: Instruction, cpu: *const CPU) !?u12 {
+fn opSkipEqImm(self: Instruction, cpu: *const Cpu) !?u12 {
     return skipNextInstructionIf(cpu, cpu.V[self.regX] == self.low8);
 }
 
 test "3XNN skip if VX == NN" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x63, 0x58, // V3 = 0x58
         0x33, 0x58, // skip
         0x00, 0x00, // skipped
@@ -237,12 +237,12 @@ test "3XNN skip if VX == NN" {
 }
 
 /// 4XNN: skip next instruction if VX != NN
-fn opSkipNeImm(self: Instruction, cpu: *const CPU) !?u12 {
+fn opSkipNeImm(self: Instruction, cpu: *const Cpu) !?u12 {
     return skipNextInstructionIf(cpu, cpu.V[self.regX] != self.low8);
 }
 
 test "4XNN skip if VX != NN" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x63, 0x58, // V3 = 0x58
         0x43, 0x20, // skip
         0x00, 0x00, // skipped
@@ -260,7 +260,7 @@ test "4XNN skip if VX != NN" {
 }
 
 /// 5XY0: skip next instruction if VX == VY
-fn opSkipEqReg(self: Instruction, cpu: *const CPU) !?u12 {
+fn opSkipEqReg(self: Instruction, cpu: *const Cpu) !?u12 {
     if (self.low4 != 0x0) {
         return error.IllegalOpcode;
     }
@@ -268,7 +268,7 @@ fn opSkipEqReg(self: Instruction, cpu: *const CPU) !?u12 {
 }
 
 test "5XY0 skip if VX == VY" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x23, // V0 = 0x23
         0x61, 0x23, // V1 = 0x23
         0x50, 0x10, // skip
@@ -292,13 +292,13 @@ test "5XY0 skip if VX == VY" {
 }
 
 /// 6XNN: set VX to NN
-fn opSetRegImm(self: Instruction, cpu: *CPU) !?u12 {
+fn opSetRegImm(self: Instruction, cpu: *Cpu) !?u12 {
     cpu.V[self.regX] = self.low8;
     return null;
 }
 
 test "6XNN set VX to NN" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x2F,
         0x61, 0x68,
     }, testing_rand);
@@ -309,13 +309,13 @@ test "6XNN set VX to NN" {
 }
 
 /// 7XNN: add NN to VX without carry
-fn opAddImm(self: Instruction, cpu: *CPU) !?u12 {
+fn opAddImm(self: Instruction, cpu: *Cpu) !?u12 {
     cpu.V[self.regX] +%= self.low8;
     return null;
 }
 
 test "7XNN add NN to VX" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x70, 0x53,
         0x70, 0xFF,
         0x71, 0x28,
@@ -336,7 +336,7 @@ test "7XNN add NN to VX" {
 }
 
 /// dispatch an arithmetic instruction beginning with 8
-fn opArithmetic(self: Instruction, cpu: *CPU) !?u12 {
+fn opArithmetic(self: Instruction, cpu: *Cpu) !?u12 {
     // vx is set to the return value of this function
     const ArithmeticOpcodeFn = *const fn (vx: u8, vy: u8, vf: *u8) ExecutionError!u8;
     const arithmetic_opcodes = [_]ArithmeticOpcodeFn{
@@ -367,7 +367,7 @@ fn opArithmetic(self: Instruction, cpu: *CPU) !?u12 {
 
 test "illegal arithmetic opcodes" {
     for ([_]u8{ 0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xF }) |lsd| {
-        var cpu = try CPU.init(&[_]u8{
+        var cpu = try Cpu.init(&[_]u8{
             0x80, 0x10 | lsd,
         }, testing_rand);
         try std.testing.expectError(error.IllegalOpcode, cpu.cycle());
@@ -382,7 +382,7 @@ fn opSetRegReg(vx: u8, vy: u8, vf: *const u8) !u8 {
 }
 
 test "8XY0 set VX to VY" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x38,
         0x81, 0x00,
         0x80, 0x20,
@@ -402,7 +402,7 @@ fn opOr(vx: u8, vy: u8, vf: *const u8) !u8 {
 }
 
 test "8XY1 bitwise OR" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x55,
         0x61, 0x33,
         0x80, 0x11,
@@ -419,7 +419,7 @@ fn opAnd(vx: u8, vy: u8, vf: *const u8) !u8 {
 }
 
 test "8XY2 bitwise AND" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x55,
         0x61, 0x33,
         0x80, 0x12,
@@ -436,7 +436,7 @@ fn opXor(vx: u8, vy: u8, vf: *const u8) !u8 {
 }
 
 test "8XY3 bitwise XOR" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x55,
         0x61, 0x33,
         0x80, 0x13,
@@ -454,7 +454,7 @@ fn opAdd(vx: u8, vy: u8, vf: *u8) !u8 {
 }
 
 test "8XY4 add registers" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 66,
         0x61, 228,
         0x80, 0x14,
@@ -462,7 +462,7 @@ test "8XY4 add registers" {
         0x80, 0x14,
     }, testing_rand);
     try cpu.cycleN(3, null);
-    try std.testing.expectEqual(@truncate(u8, 294), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, @truncate(294)), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
     try cpu.cycleN(2, null);
     try std.testing.expectEqual(@as(u8, 64), cpu.V[0x0]);
@@ -477,7 +477,7 @@ fn opSub(vx: u8, vy: u8, vf: *u8) !u8 {
 }
 
 test "8XY5 subtract registers" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 107,
         0x61, 25,
         0x80, 0x15,
@@ -489,7 +489,7 @@ test "8XY5 subtract registers" {
     try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
     try cpu.cycleN(3, null);
-    try std.testing.expectEqual(@bitCast(u8, @truncate(i8, 13 - 59)), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, @bitCast(@as(i8, @truncate(13 - 59)))), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
 }
 
@@ -501,7 +501,7 @@ fn opShiftRight(vx: u8, vy: u8, vf: *u8) !u8 {
 }
 
 test "8XY6 shift right" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x61, 0b01011001,
         0x80, 0x16,
         0x80, 0x06,
@@ -523,7 +523,7 @@ fn opSubRev(vx: u8, vy: u8, vf: *u8) !u8 {
 }
 
 test "8XY7 subtract registers in reverse" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 25,
         0x61, 107,
         0x80, 0x17,
@@ -535,7 +535,7 @@ test "8XY7 subtract registers in reverse" {
     try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
     try cpu.cycleN(3, null);
-    try std.testing.expectEqual(@bitCast(u8, @truncate(i8, 13 - 59)), cpu.V[0x0]);
+    try std.testing.expectEqual(@as(u8, @bitCast(@as(i8, @truncate(13 - 59)))), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
 }
 
@@ -547,7 +547,7 @@ fn opShiftLeft(vx: u8, vy: u8, vf: *u8) !u8 {
 }
 
 test "8XYE shift left" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x61, 0b10010110,
         0x80, 0x1E,
         0x80, 0x0E,
@@ -562,7 +562,7 @@ test "8XYE shift left" {
 }
 
 /// 9XY0: skip next instruction if VX != VY
-fn opSkipNeReg(self: Instruction, cpu: *const CPU) !?u12 {
+fn opSkipNeReg(self: Instruction, cpu: *const Cpu) !?u12 {
     if (self.low4 != 0x0) {
         return error.IllegalOpcode;
     }
@@ -570,7 +570,7 @@ fn opSkipNeReg(self: Instruction, cpu: *const CPU) !?u12 {
 }
 
 test "9XY0 skip if VX != VY" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x23, // V0 = 0x23
         0x61, 0xB2, // V1 = 0xB2
         0x90, 0x10, // skip
@@ -594,13 +594,13 @@ test "9XY0 skip if VX != VY" {
 }
 
 /// ANNN: set I to NNN
-fn opSetIImm(self: Instruction, cpu: *CPU) !?u12 {
+fn opSetIImm(self: Instruction, cpu: *Cpu) !?u12 {
     cpu.I = self.low12;
     return null;
 }
 
 test "ANNN set I" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0xA6, 0x83,
     }, testing_rand);
     try cpu.cycle();
@@ -608,12 +608,12 @@ test "ANNN set I" {
 }
 
 /// BNNN: jump to NNN + V0
-fn opJumpV0(self: Instruction, cpu: *const CPU) !?u12 {
+fn opJumpV0(self: Instruction, cpu: *const Cpu) !?u12 {
     return self.low12 + cpu.V[0x0];
 }
 
 test "BNNN jump adding V0" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x58,
         0xB4, 0xC3,
     }, testing_rand);
@@ -623,7 +623,7 @@ test "BNNN jump adding V0" {
 }
 
 /// CXNN: set VX to rand() & NN
-fn opRandom(self: Instruction, cpu: *CPU) !?u12 {
+fn opRandom(self: Instruction, cpu: *Cpu) !?u12 {
     cpu.V[self.regX] = cpu.rand.int(u8) & self.low8;
     return null;
 }
@@ -633,7 +633,7 @@ test "CXNN random" {
     const rand1 = prng1.random();
     var prng2 = std.rand.DefaultPrng.init(2387);
     const rand2 = prng2.random();
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0xC0, 0xFF,
         0xC0, 0x07,
         0xC0, 0x00,
@@ -648,18 +648,18 @@ test "CXNN random" {
 
 /// DXYN: draw an 8xN sprite from memory starting at I at (VX, VY); set VF to 1 if any pixel was
 /// turned off, 0 otherwise
-fn opDraw(self: Instruction, cpu: *CPU) !?u12 {
+fn opDraw(self: Instruction, cpu: *Cpu) !?u12 {
     cpu.V[0xF] = 0;
     const sprite: []const u8 = cpu.mem[(cpu.I)..(cpu.I + self.low4)];
-    const x_start = cpu.V[self.regX] % CPU.display_width;
-    const y_start = cpu.V[self.regY] % CPU.display_height;
+    const x_start = cpu.V[self.regX] % Cpu.display_width;
+    const y_start = cpu.V[self.regY] % Cpu.display_height;
     for (sprite, 0..) |row, y_sprite| {
         for (0..8) |x_sprite| {
-            const mask = @as(u8, 0b10000000) >> @intCast(u3, x_sprite);
+            const mask = @as(u8, 0b10000000) >> @as(u3, @intCast(x_sprite));
             const pixel = (row & mask != 0);
             const x = x_start + x_sprite;
             const y = y_start + y_sprite;
-            if (x >= CPU.display_width or y >= CPU.display_height) {
+            if (x >= Cpu.display_width or y >= Cpu.display_height) {
                 continue;
             }
             if (pixel and cpu.display[y][x]) {
@@ -690,7 +690,7 @@ test "DXYN draw" {
     };
     // calculate padding so the sprites start at 0x300
     const rom = program ++ ([1]u8{0} ** (0x100 - program.len)) ++ sprites;
-    var cpu = try CPU.init(&rom, testing_rand);
+    var cpu = try Cpu.init(&rom, testing_rand);
 
     try cpu.cycleN(5, null);
     // VF should be cleared
@@ -698,7 +698,7 @@ test "DXYN draw" {
     // check the screen
     for (sprites, 0..) |pixel, y| {
         for (0..8) |x| {
-            const expected = (pixel & (@as(u8, 1) << @intCast(u3, 7 - x))) != 0;
+            const expected = (pixel & (@as(u8, 1) << @as(u3, @intCast(7 - x)))) != 0;
             try std.testing.expectEqual(expected, cpu.display[y + 17][x + 8]);
         }
     }
@@ -716,7 +716,7 @@ test "DXYN draw" {
 
 /// EX9E: skip next instruction if the key in VX is pressed
 /// EXA1: skip next instruction if the key in VX is not pressed
-fn opInput(self: Instruction, cpu: *CPU) !?u12 {
+fn opInput(self: Instruction, cpu: *Cpu) !?u12 {
     return switch (self.low8) {
         0x9E => skipNextInstructionIf(cpu, cpu.keys[cpu.V[self.regX]]),
         0xA1 => skipNextInstructionIf(cpu, !cpu.keys[cpu.V[self.regX]]),
@@ -727,8 +727,8 @@ fn opInput(self: Instruction, cpu: *CPU) !?u12 {
 test "illegal EXYZ opcodes" {
     for (0x00..0xFF) |low8| {
         if (low8 != 0x9E and low8 != 0xA1) {
-            var cpu = try CPU.init(&[_]u8{
-                0xE0, @intCast(u8, low8),
+            var cpu = try Cpu.init(&[_]u8{
+                0xE0, @as(u8, @intCast(low8)),
             }, testing_rand);
             try std.testing.expectError(error.IllegalOpcode, cpu.cycle());
         }
@@ -736,7 +736,7 @@ test "illegal EXYZ opcodes" {
 }
 
 test "EX9E skip if pressed" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x05, // check key 5
         0xE0, 0x9E, // skip if 5 pressed (yes)
         0x00, 0x00, // skipped
@@ -753,7 +753,7 @@ test "EX9E skip if pressed" {
 }
 
 test "EXA1 skip if not pressed" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x05, // check key 5
         0xE0, 0xA1, // skip if 5 not pressed (no)
         0xE1, 0xA1, // skip if 0 not pressed (V1 still zeroed) (yes)
@@ -769,7 +769,7 @@ test "EXA1 skip if not pressed" {
 }
 
 /// dispatch an instruction beginning with F
-fn opFXYZ(self: Instruction, cpu: *CPU) !?u12 {
+fn opFXYZ(self: Instruction, cpu: *Cpu) !?u12 {
     const misc_opcode_fns = comptime blk: {
         var fns: [256]OpcodeFn = .{opIllegal} ** 256;
         fns[0x07] = opStoreDT;
@@ -788,33 +788,33 @@ fn opFXYZ(self: Instruction, cpu: *CPU) !?u12 {
 }
 
 /// FX07: store the value of the delay timer in VX
-fn opStoreDT(self: Instruction, cpu: *CPU) !?u12 {
+fn opStoreDT(self: Instruction, cpu: *Cpu) !?u12 {
     cpu.V[self.regX] = cpu.dt;
     return null;
 }
 
 test "FX07 get DT" {
-    var cpu = try CPU.init(&[_]u8{ 0xF0, 0x07 }, testing_rand);
+    var cpu = try Cpu.init(&[_]u8{ 0xF0, 0x07 }, testing_rand);
     cpu.dt = 30;
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 30), cpu.V[0x0]);
 }
 
 /// FX0A: wait until any key is pressed, then store the key that was pressed in VX
-fn opWaitForKey(self: Instruction, cpu: *CPU) !?u12 {
+fn opWaitForKey(self: Instruction, cpu: *Cpu) !?u12 {
     _ = cpu;
     _ = self;
     return error.NotImplemented;
 }
 
 /// FX15: set the delay timer to the value of VX
-fn opSetDT(self: Instruction, cpu: *CPU) !?u12 {
+fn opSetDT(self: Instruction, cpu: *Cpu) !?u12 {
     cpu.dt = cpu.V[self.regX];
     return null;
 }
 
 test "FX15 set DT" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x10,
         0xF0, 0x15,
     }, testing_rand);
@@ -824,13 +824,13 @@ test "FX15 set DT" {
 }
 
 /// FX18: set the sound timer to the value of VX
-fn opSetST(self: Instruction, cpu: *CPU) !?u12 {
+fn opSetST(self: Instruction, cpu: *Cpu) !?u12 {
     cpu.st = cpu.V[self.regX];
     return null;
 }
 
 test "FX18 set ST" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x10,
         0xF0, 0x18,
     }, testing_rand);
@@ -840,13 +840,13 @@ test "FX18 set ST" {
 }
 
 /// FX1E: increment I by the value of VX
-fn opIncIReg(self: Instruction, cpu: *CPU) !?u12 {
+fn opIncIReg(self: Instruction, cpu: *Cpu) !?u12 {
     cpu.I +%= cpu.V[self.regX];
     return null;
 }
 
 test "FX1E increment I by register" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0xA5, 0x00, // I = 0x500
         0x63, 0x1F, // V3 = 0x1F
         0xF3, 0x1E, // I += V3
@@ -861,23 +861,23 @@ test "FX1E increment I by register" {
 }
 
 /// FX29: set I to the address of the sprite for the digit in VX
-fn opSetISprite(self: Instruction, cpu: *CPU) !?u12 {
-    cpu.I = CPU.font_base_address + (@as(u12, @truncate(u4, cpu.V[self.regX])) * CPU.font_character_size);
+fn opSetISprite(self: Instruction, cpu: *Cpu) !?u12 {
+    cpu.I = Cpu.font_base_address + (@as(u12, @as(u4, @truncate(cpu.V[self.regX]))) * Cpu.font_character_size);
     return null;
 }
 
 test "FX29 get address of font" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 0x3A, // V0 = 0x3A
         0xF0, 0x29, // get that character
     }, testing_rand);
     try cpu.cycle();
     try cpu.cycle();
-    try std.testing.expectEqual(@as(u12, CPU.font_base_address + 0xA * CPU.font_character_size), cpu.I);
+    try std.testing.expectEqual(@as(u12, Cpu.font_base_address + 0xA * Cpu.font_character_size), cpu.I);
 }
 
 /// FX33: store the binary-coded decimal version of the value of VX in I, I + 1, and I + 2
-fn opStoreBCD(self: Instruction, cpu: *CPU) !?u12 {
+fn opStoreBCD(self: Instruction, cpu: *Cpu) !?u12 {
     const value = cpu.V[self.regX];
     cpu.mem[cpu.I] = value / 100;
     cpu.mem[cpu.I + 1] = (value / 10) % 10;
@@ -886,7 +886,7 @@ fn opStoreBCD(self: Instruction, cpu: *CPU) !?u12 {
 }
 
 test "FX33 store BCD" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 83, // V0 = 83
         0xA3, 0x00, // I = 0x300
         0xF0, 0x33, // store BCD of V0
@@ -898,7 +898,7 @@ test "FX33 store BCD" {
 }
 
 /// FX55: store registers [V0, VX] in memory starting at I; set I to I + X + 1
-fn opStore(self: Instruction, cpu: *CPU) !?u12 {
+fn opStore(self: Instruction, cpu: *Cpu) !?u12 {
     for (0..(self.regX + 1)) |offset| {
         cpu.mem[cpu.I] = cpu.V[offset];
         cpu.I += 1;
@@ -907,7 +907,7 @@ fn opStore(self: Instruction, cpu: *CPU) !?u12 {
 }
 
 test "FX55 store registers" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0x60, 5,
         0x61, 4,
         0x62, 3,
@@ -922,13 +922,13 @@ test "FX55 store registers" {
     for (0..5) |i| {
         const addr = 0x400 + i;
         const val = 5 - i;
-        try std.testing.expectEqual(@intCast(u8, val), cpu.mem[addr]);
+        try std.testing.expectEqual(@as(u8, @intCast(val)), cpu.mem[addr]);
     }
     try std.testing.expectEqual(@as(u8, 0), cpu.mem[0x405]);
 }
 
 /// FX65: load values from memory starting at I into registers [V0, VX]; set I to I + X + 1
-fn opLoad(self: Instruction, cpu: *CPU) !?u12 {
+fn opLoad(self: Instruction, cpu: *Cpu) !?u12 {
     for (0..(self.regX + 1)) |offset| {
         cpu.V[offset] = cpu.mem[cpu.I];
         cpu.I += 1;
@@ -937,7 +937,7 @@ fn opLoad(self: Instruction, cpu: *CPU) !?u12 {
 }
 
 test "FX65 load registers" {
-    var cpu = try CPU.init(&[_]u8{
+    var cpu = try Cpu.init(&[_]u8{
         0xA2, 0x04, // set I
         0xF4, 0x65, // load them
         5, 4, 3, 2, 1, // data to load
@@ -948,7 +948,7 @@ test "FX65 load registers" {
     try std.testing.expectEqual(@as(u12, 0x209), cpu.I);
     for (0..5) |i| {
         const val = 5 - i;
-        try std.testing.expectEqual(@intCast(u8, val), cpu.V[i]);
+        try std.testing.expectEqual(@as(u8, @intCast(val)), cpu.V[i]);
     }
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0x5]);
 }

@@ -1,4 +1,4 @@
-const CPU = @import("./CPU.zig");
+const Cpu = @import("./cpu.zig");
 
 pub const Timer = struct {
     sleepMicroseconds: fn (u32) void,
@@ -11,7 +11,7 @@ pub const Input = struct {
 };
 
 pub const Display = struct {
-    refresh: fn ([CPU.display_height][CPU.display_width]bool) void,
+    refresh: fn (*const [Cpu.display_height][Cpu.display_width]bool) void,
 };
 
 pub const Sound = struct {

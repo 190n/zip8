@@ -11,3 +11,8 @@ pub fn main() anyerror!void {
     };
     std.process.exit(0);
 }
+
+comptime {
+    std.testing.refAllDecls(@import("instruction.zig"));
+    std.testing.refAllDecls(@import("cpu.zig"));
+}
