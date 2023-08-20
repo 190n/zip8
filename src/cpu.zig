@@ -27,8 +27,15 @@ rand: std.rand.Random,
 
 /// display is 64x32 stored row-major
 display: [display_height][display_width]bool = std.mem.zeroes([display_height][display_width]bool),
+/// whether the contents of the screen have changed since the last time this flag was set to false
+display_dirty: bool = false,
+
 /// whether each key 0-F is pressed
 keys: [16]bool = .{false} ** 16,
+
+/// which register the next keypress should be stored in (only if a FX0A "wait for key" instruction
+/// is waiting
+next_key_register: ?u4 = null,
 
 /// delay timer, counts down at 60Hz if nonzero
 dt: u8 = 0,
@@ -63,6 +70,26 @@ pub fn cycleN(self: *Cpu, n: usize, completed: ?*usize) !void {
     while (i < n) : (i += 1) {
         try self.cycle();
         if (completed) |ptr| ptr.* += 1;
+    }
+}
+
+/// decrement the delay and sound timers, if either is above zero. should be called 60 times per
+/// second.
+pub fn timerTick(self: *Cpu) void {
+    if (self.dt > 0) self.dt -= 1;
+    if (self.st > 0) self.st -= 1;
+}
+
+pub fn setKeys(self: *Cpu, new_keys: *const [16]bool) void {
+    if (self.next_key_register) |reg| {
+        for (new_keys, self.keys, 0..) |now_pressed, was_pressed, key| {
+            if (now_pressed and !was_pressed) {
+                self.V[reg] = @intCast(key);
+            }
+        }
+        self.pc += 2;
+    } else {
+        @memcpy(&self.keys, new_keys);
     }
 }
 

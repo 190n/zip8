@@ -115,6 +115,7 @@ fn op00EX(self: Instruction, cpu: *Cpu) !?u12 {
             for (&cpu.display) |*row| {
                 @memset(row, false);
             }
+            cpu.display_dirty = true;
             return null;
         },
         0x00EE => {
@@ -144,6 +145,7 @@ test "00E0 clear screen" {
             try std.testing.expectEqual(false, pixel);
         }
     }
+    try std.testing.expect(cpu.display_dirty);
 }
 
 test "00EE return" {
@@ -668,6 +670,7 @@ fn opDraw(self: Instruction, cpu: *Cpu) !?u12 {
             }
             // draw using XOR
             cpu.display[y][x] = (pixel != cpu.display[y][x]);
+            cpu.display_dirty = cpu.display_dirty or pixel;
         }
     }
     return null;
@@ -695,6 +698,7 @@ test "DXYN draw" {
     try cpu.cycleN(5, null);
     // VF should be cleared
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
+    try std.testing.expect(cpu.display_dirty);
     // check the screen
     for (sprites, 0..) |pixel, y| {
         for (0..8) |x| {
@@ -703,9 +707,11 @@ test "DXYN draw" {
         }
     }
 
+    cpu.display_dirty = false;
     try cpu.cycle();
     // now there was a collision
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
+    try std.testing.expect(cpu.display_dirty);
     // all off
     for (cpu.display) |row| {
         for (row) |pixel| {
@@ -802,9 +808,28 @@ test "FX07 get DT" {
 
 /// FX0A: wait until any key is pressed, then store the key that was pressed in VX
 fn opWaitForKey(self: Instruction, cpu: *Cpu) !?u12 {
-    _ = cpu;
-    _ = self;
-    return error.NotImplemented;
+    cpu.next_key_register = self.regX;
+    // stay at same instruction
+    return cpu.pc;
+}
+
+test "FX0A wait for a keypress" {
+    var cpu = try Cpu.init(&[_]u8{
+        0xF4, 0x0A,
+    }, testing_rand);
+
+    // it should stay at the same instruction
+    for (0..5) |_| {
+        try cpu.cycle();
+        try std.testing.expectEqual(@as(u12, 0x200), cpu.pc);
+    }
+
+    // press key 1
+    cpu.setKeys(&(.{false} ++ .{true} ++ .{false} ** 14));
+    // V4 should be set to 1
+    try std.testing.expectEqual(@as(u8, 1), cpu.V[0x4]);
+    // and the cpu should be continuing past the blocked instruction
+    try std.testing.expectEqual(@as(u12, 0x202), cpu.pc);
 }
 
 /// FX15: set the delay timer to the value of VX
