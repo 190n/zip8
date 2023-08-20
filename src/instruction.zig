@@ -21,8 +21,7 @@ low4: u4,
 /// full opcode, if needed for any reason
 opcode: u16,
 
-var prng = std.rand.DefaultPrng.init(1337);
-const testing_rand = prng.random();
+const testing_seed = 1337;
 
 /// split up an opcode into useful parts
 pub fn decode(opcode: u16) Instruction {
@@ -112,9 +111,7 @@ fn opIllegalArithmetic(vx: u8, vy: u8, vf: *const u8) !u8 {
 fn op00EX(self: Instruction, cpu: *Cpu) !?u12 {
     switch (self.opcode) {
         0x00E0 => {
-            for (&cpu.display) |*row| {
-                @memset(row, false);
-            }
+            @memset(&cpu.display, false);
             cpu.display_dirty = true;
             return null;
         },
@@ -132,18 +129,12 @@ fn op00EX(self: Instruction, cpu: *Cpu) !?u12 {
 test "00E0 clear screen" {
     var cpu = try Cpu.init(&[_]u8{
         0x00, 0xE0,
-    }, testing_rand);
+    }, testing_seed);
     // fill screen
-    for (&cpu.display) |*row| {
-        for (row) |*pixel| {
-            pixel.* = true;
-        }
-    }
+    @memset(&cpu.display, true);
     try cpu.cycle();
-    for (&cpu.display) |*row| {
-        for (row) |pixel| {
-            try std.testing.expectEqual(false, pixel);
-        }
+    for (cpu.display) |pixel| {
+        try std.testing.expectEqual(false, pixel);
     }
     try std.testing.expect(cpu.display_dirty);
 }
@@ -154,7 +145,7 @@ test "00EE return" {
         0x00, 0x00,
         0x00, 0x00,
         0x00, 0xEE, // return again but now the stack is empty
-    }, testing_rand);
+    }, testing_seed);
     // set up somewhere to return to
     try cpu.stack.append(0x206);
     try cpu.cycle();
@@ -174,7 +165,7 @@ fn opJump(self: Instruction, cpu: *const Cpu) !?u12 {
 test "1NNN jump" {
     var cpu = try Cpu.init(&[_]u8{
         0x15, 0x62, // jump to 0x562
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, 0x562), cpu.pc);
 }
@@ -194,7 +185,7 @@ test "2NNN call" {
         0x00, 0x00,
         0x00, 0x00,
         0x12, 0x00, // 0x208: jump back to 0x200
-    }, testing_rand);
+    }, testing_seed);
 
     // fill up the stack
     for (0..Cpu.stack_size) |i| {
@@ -212,7 +203,7 @@ test "2NNN call" {
 
 /// calculate the new PC, using condition as whether the next instruction should be skipped
 fn skipNextInstructionIf(cpu: *const Cpu, condition: bool) u12 {
-    return cpu.pc + @as(u12, if (condition) 4 else 2);
+    return cpu.pc +% @as(u12, if (condition) 4 else 2);
 }
 
 /// 3XNN: skip next instruction if VX == NN
@@ -227,7 +218,7 @@ test "3XNN skip if VX == NN" {
         0x00, 0x00, // skipped
         0x33, 0x20, // won't skip
         0x32, 0x58, // won't skip
-    }, testing_rand);
+    }, testing_seed);
 
     try cpu.cycle();
     try cpu.cycle();
@@ -250,7 +241,7 @@ test "4XNN skip if VX != NN" {
         0x00, 0x00, // skipped
         0x43, 0x58, // won't skip
         0x42, 0x58, // skip
-    }, testing_rand);
+    }, testing_seed);
 
     try cpu.cycle();
     try cpu.cycle();
@@ -279,7 +270,7 @@ test "5XY0 skip if VX == VY" {
         0x00, 0x00, // skipped
         0x50, 0x20, // won't skip
         0x50, 0x11, // error
-    }, testing_rand);
+    }, testing_seed);
     // initialize registers
     try cpu.cycle();
     try cpu.cycle();
@@ -303,7 +294,7 @@ test "6XNN set VX to NN" {
     var cpu = try Cpu.init(&[_]u8{
         0x60, 0x2F,
         0x61, 0x68,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x2F), cpu.V[0x0]);
     try cpu.cycle();
@@ -321,7 +312,7 @@ test "7XNN add NN to VX" {
         0x70, 0x53,
         0x70, 0xFF,
         0x71, 0x28,
-    }, testing_rand);
+    }, testing_seed);
     // V0 = 0x53
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x53), cpu.V[0x0]);
@@ -371,7 +362,7 @@ test "illegal arithmetic opcodes" {
     for ([_]u8{ 0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xF }) |lsd| {
         var cpu = try Cpu.init(&[_]u8{
             0x80, 0x10 | lsd,
-        }, testing_rand);
+        }, testing_seed);
         try std.testing.expectError(error.IllegalOpcode, cpu.cycle());
     }
 }
@@ -388,7 +379,7 @@ test "8XY0 set VX to VY" {
         0x60, 0x38,
         0x81, 0x00,
         0x80, 0x20,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x38), cpu.V[0x1]);
@@ -408,7 +399,7 @@ test "8XY1 bitwise OR" {
         0x60, 0x55,
         0x61, 0x33,
         0x80, 0x11,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0x77), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
@@ -425,7 +416,7 @@ test "8XY2 bitwise AND" {
         0x60, 0x55,
         0x61, 0x33,
         0x80, 0x12,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0x11), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
@@ -442,7 +433,7 @@ test "8XY3 bitwise XOR" {
         0x60, 0x55,
         0x61, 0x33,
         0x80, 0x13,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0x66), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
@@ -462,7 +453,7 @@ test "8XY4 add registers" {
         0x80, 0x14,
         0x61, 26,
         0x80, 0x14,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, @truncate(294)), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
@@ -486,7 +477,7 @@ test "8XY5 subtract registers" {
         0x60, 13,
         0x61, 59,
         0x80, 0x15,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
@@ -507,7 +498,7 @@ test "8XY6 shift right" {
         0x61, 0b01011001,
         0x80, 0x16,
         0x80, 0x06,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0b00101100), cpu.V[0x0]);
@@ -532,7 +523,7 @@ test "8XY7 subtract registers in reverse" {
         0x60, 59,
         0x61, 13,
         0x80, 0x17,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
@@ -553,7 +544,7 @@ test "8XYE shift left" {
         0x61, 0b10010110,
         0x80, 0x1E,
         0x80, 0x0E,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0b00101100), cpu.V[0x0]);
@@ -581,7 +572,7 @@ test "9XY0 skip if VX != VY" {
         0x00, 0x00, // skipped
         0x93, 0x20, // won't skip
         0x90, 0x11, // error
-    }, testing_rand);
+    }, testing_seed);
     // initialize registers
     try cpu.cycle();
     try cpu.cycle();
@@ -604,21 +595,21 @@ fn opSetIImm(self: Instruction, cpu: *Cpu) !?u12 {
 test "ANNN set I" {
     var cpu = try Cpu.init(&[_]u8{
         0xA6, 0x83,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, 0x683), cpu.I);
 }
 
 /// BNNN: jump to NNN + V0
 fn opJumpV0(self: Instruction, cpu: *const Cpu) !?u12 {
-    return self.low12 + cpu.V[0x0];
+    return self.low12 +% cpu.V[0x0];
 }
 
 test "BNNN jump adding V0" {
     var cpu = try Cpu.init(&[_]u8{
         0x60, 0x58,
         0xB4, 0xC3,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, 0x58 + 0x4C3), cpu.pc);
@@ -626,24 +617,22 @@ test "BNNN jump adding V0" {
 
 /// CXNN: set VX to rand() & NN
 fn opRandom(self: Instruction, cpu: *Cpu) !?u12 {
-    cpu.V[self.regX] = cpu.rand.int(u8) & self.low8;
+    cpu.V[self.regX] = cpu.rand.random().int(u8) & self.low8;
     return null;
 }
 
 test "CXNN random" {
-    var prng1 = std.rand.DefaultPrng.init(2387);
-    const rand1 = prng1.random();
-    var prng2 = std.rand.DefaultPrng.init(2387);
-    const rand2 = prng2.random();
+    var prng = std.rand.DefaultPrng.init(testing_seed);
+    const rand = prng.random();
     var cpu = try Cpu.init(&[_]u8{
         0xC0, 0xFF,
         0xC0, 0x07,
         0xC0, 0x00,
-    }, rand1);
+    }, testing_seed);
     try cpu.cycle();
-    try std.testing.expectEqual(rand2.int(u8), cpu.V[0x0]);
+    try std.testing.expectEqual(rand.int(u8), cpu.V[0x0]);
     try cpu.cycle();
-    try std.testing.expectEqual(rand2.int(u8) & 0x07, cpu.V[0x0]);
+    try std.testing.expectEqual(rand.int(u8) & 0x07, cpu.V[0x0]);
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x00), cpu.V[0x0]);
 }
@@ -664,12 +653,14 @@ fn opDraw(self: Instruction, cpu: *Cpu) !?u12 {
             if (x >= Cpu.display_width or y >= Cpu.display_height) {
                 continue;
             }
-            if (pixel and cpu.display[y][x]) {
+
+            const index = y * Cpu.display_width + x;
+            if (pixel and cpu.display[index]) {
                 // pixel turned off
                 cpu.V[0xF] = 1;
             }
             // draw using XOR
-            cpu.display[y][x] = (pixel != cpu.display[y][x]);
+            cpu.display[index] = (pixel != cpu.display[index]);
             cpu.display_dirty = cpu.display_dirty or pixel;
         }
     }
@@ -693,7 +684,7 @@ test "DXYN draw" {
     };
     // calculate padding so the sprites start at 0x300
     const rom = program ++ ([1]u8{0} ** (0x100 - program.len)) ++ sprites;
-    var cpu = try Cpu.init(&rom, testing_rand);
+    var cpu = try Cpu.init(&rom, testing_seed);
 
     try cpu.cycleN(5, null);
     // VF should be cleared
@@ -703,7 +694,7 @@ test "DXYN draw" {
     for (sprites, 0..) |pixel, y| {
         for (0..8) |x| {
             const expected = (pixel & (@as(u8, 1) << @as(u3, @intCast(7 - x)))) != 0;
-            try std.testing.expectEqual(expected, cpu.display[y + 17][x + 8]);
+            try std.testing.expectEqual(expected, cpu.display[Cpu.display_width * (y + 17) + x + 8]);
         }
     }
 
@@ -713,10 +704,8 @@ test "DXYN draw" {
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
     try std.testing.expect(cpu.display_dirty);
     // all off
-    for (cpu.display) |row| {
-        for (row) |pixel| {
-            try std.testing.expectEqual(false, pixel);
-        }
+    for (cpu.display) |pixel| {
+        try std.testing.expectEqual(false, pixel);
     }
 }
 
@@ -735,7 +724,7 @@ test "illegal EXYZ opcodes" {
         if (low8 != 0x9E and low8 != 0xA1) {
             var cpu = try Cpu.init(&[_]u8{
                 0xE0, @as(u8, @intCast(low8)),
-            }, testing_rand);
+            }, testing_seed);
             try std.testing.expectError(error.IllegalOpcode, cpu.cycle());
         }
     }
@@ -747,7 +736,7 @@ test "EX9E skip if pressed" {
         0xE0, 0x9E, // skip if 5 pressed (yes)
         0x00, 0x00, // skipped
         0xE1, 0x9E, // skip if 0 pressed (V1 still zeroed) (no)
-    }, testing_rand);
+    }, testing_seed);
     cpu.keys[5] = true;
     try cpu.cycle();
     try cpu.cycle();
@@ -763,7 +752,7 @@ test "EXA1 skip if not pressed" {
         0x60, 0x05, // check key 5
         0xE0, 0xA1, // skip if 5 not pressed (no)
         0xE1, 0xA1, // skip if 0 not pressed (V1 still zeroed) (yes)
-    }, testing_rand);
+    }, testing_seed);
     cpu.keys[5] = true;
     try cpu.cycle();
     try cpu.cycle();
@@ -800,7 +789,7 @@ fn opStoreDT(self: Instruction, cpu: *Cpu) !?u12 {
 }
 
 test "FX07 get DT" {
-    var cpu = try Cpu.init(&[_]u8{ 0xF0, 0x07 }, testing_rand);
+    var cpu = try Cpu.init(&[_]u8{ 0xF0, 0x07 }, testing_seed);
     cpu.dt = 30;
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 30), cpu.V[0x0]);
@@ -816,7 +805,7 @@ fn opWaitForKey(self: Instruction, cpu: *Cpu) !?u12 {
 test "FX0A wait for a keypress" {
     var cpu = try Cpu.init(&[_]u8{
         0xF4, 0x0A,
-    }, testing_rand);
+    }, testing_seed);
 
     // it should stay at the same instruction
     for (0..5) |_| {
@@ -842,7 +831,7 @@ test "FX15 set DT" {
     var cpu = try Cpu.init(&[_]u8{
         0x60, 0x10,
         0xF0, 0x15,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x10), cpu.dt);
@@ -858,7 +847,7 @@ test "FX18 set ST" {
     var cpu = try Cpu.init(&[_]u8{
         0x60, 0x10,
         0xF0, 0x18,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x10), cpu.st);
@@ -878,7 +867,7 @@ test "FX1E increment I by register" {
         0xAF, 0xFF, // I = 0xFFF
         0x62, 0x02, // V2 = 0x02
         0xF2, 0x1E, // I += V2 (overflows)
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u12, 0x51F), cpu.I);
     try cpu.cycleN(3, null);
@@ -895,7 +884,7 @@ test "FX29 get address of font" {
     var cpu = try Cpu.init(&[_]u8{
         0x60, 0x3A, // V0 = 0x3A
         0xF0, 0x29, // get that character
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, Cpu.font_base_address + 0xA * Cpu.font_character_size), cpu.I);
@@ -905,8 +894,8 @@ test "FX29 get address of font" {
 fn opStoreBCD(self: Instruction, cpu: *Cpu) !?u12 {
     const value = cpu.V[self.regX];
     cpu.mem[cpu.I] = value / 100;
-    cpu.mem[cpu.I + 1] = (value / 10) % 10;
-    cpu.mem[cpu.I + 2] = value % 10;
+    cpu.mem[cpu.I +% 1] = (value / 10) % 10;
+    cpu.mem[cpu.I +% 2] = value % 10;
     return null;
 }
 
@@ -915,7 +904,7 @@ test "FX33 store BCD" {
         0x60, 83, // V0 = 83
         0xA3, 0x00, // I = 0x300
         0xF0, 0x33, // store BCD of V0
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0), cpu.mem[0x300]);
     try std.testing.expectEqual(@as(u8, 8), cpu.mem[0x301]);
@@ -926,7 +915,7 @@ test "FX33 store BCD" {
 fn opStore(self: Instruction, cpu: *Cpu) !?u12 {
     for (0..(self.regX + 1)) |offset| {
         cpu.mem[cpu.I] = cpu.V[offset];
-        cpu.I += 1;
+        cpu.I +%= 1;
     }
     return null;
 }
@@ -941,7 +930,7 @@ test "FX55 store registers" {
         0x65, 0xFF, // make sure this is *not* stored
         0xA4, 0x00, // I = 0x400
         0xF4, 0x55,
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycleN(8, null);
     try std.testing.expectEqual(@as(u12, 0x405), cpu.I);
     for (0..5) |i| {
@@ -956,7 +945,7 @@ test "FX55 store registers" {
 fn opLoad(self: Instruction, cpu: *Cpu) !?u12 {
     for (0..(self.regX + 1)) |offset| {
         cpu.V[offset] = cpu.mem[cpu.I];
-        cpu.I += 1;
+        cpu.I +%= 1;
     }
     return null;
 }
@@ -967,7 +956,7 @@ test "FX65 load registers" {
         0xF4, 0x65, // load them
         5, 4, 3, 2, 1, // data to load
         0xFF, // do not load
-    }, testing_rand);
+    }, testing_seed);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, 0x209), cpu.I);

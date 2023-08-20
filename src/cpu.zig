@@ -23,10 +23,10 @@ pc: u12 = initial_pc,
 /// call stack
 stack: std.BoundedArray(u12, 16),
 /// random number generator to use
-rand: std.rand.Random,
+rand: std.rand.DefaultPrng,
 
 /// display is 64x32 stored row-major
-display: [display_height][display_width]bool = std.mem.zeroes([display_height][display_width]bool),
+display: [display_height * display_width]bool = .{false} ** (display_height * display_width),
 /// whether the contents of the screen have changed since the last time this flag was set to false
 display_dirty: bool = false,
 
@@ -43,12 +43,16 @@ dt: u8 = 0,
 st: u8 = 0,
 
 /// initialize a CPU and copy the program into memory
-pub fn init(program: []const u8, rand: std.rand.Random) error{ProgramTooLong}!Cpu {
-    var cpu = Cpu{ .rand = rand, .stack = std.BoundedArray(u12, stack_size).init(0) catch unreachable };
+pub fn init(program: []const u8, seed: u64) error{ProgramTooLong}!Cpu {
+    var cpu = Cpu{
+        .rand = std.rand.DefaultPrng.init(seed),
+        .stack = std.BoundedArray(u12, stack_size).init(0) catch unreachable,
+    };
     if (program.len > (memory_size - initial_pc)) {
         return error.ProgramTooLong;
     }
-    std.mem.copy(u8, cpu.mem[initial_pc..], program);
+    @memcpy(cpu.mem[initial_pc..].ptr, program);
+    // std.mem.copy(u8, cpu.mem[initial_pc..], program);
     return cpu;
 }
 
@@ -58,7 +62,7 @@ pub fn cycle(self: *Cpu) !void {
     if (try inst.exec(self)) |new_pc| {
         self.pc = new_pc;
     } else {
-        self.pc += 2;
+        self.pc +%= 2;
     }
 }
 
@@ -87,7 +91,7 @@ pub fn setKeys(self: *Cpu, new_keys: *const [16]bool) void {
                 self.V[reg] = @intCast(key);
             }
         }
-        self.pc += 2;
+        self.pc +%= 2;
     } else {
         @memcpy(&self.keys, new_keys);
     }
@@ -102,10 +106,8 @@ test "Cpu.init" {
     try std.testing.expectEqual(@as(u12, initial_pc), cpu.pc);
     try std.testing.expectEqual(@as(usize, 0), cpu.stack.len);
 
-    for (cpu.display) |row| {
-        for (row) |pixel| {
-            try std.testing.expectEqual(false, pixel);
-        }
+    for (cpu.display) |pixel| {
+        try std.testing.expectEqual(false, pixel);
     }
 
     try std.testing.expectEqualSlices(bool, &(.{false} ** 16), &cpu.keys);
