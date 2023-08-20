@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
         .target = .{
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
-            .cpu_features_add = std.Target.Cpu.Feature.feature_set_fns(std.Target.wasm.Feature).featureSet(&.{.bulk_memory}),
+            .cpu_features_add = std.Target.wasm.featureSet(&.{.bulk_memory}),
         },
         .optimize = optimize,
     });
