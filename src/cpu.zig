@@ -60,7 +60,9 @@ pub fn cycle(self: *Cpu) !void {
     const inst = Instruction.decode(opcode);
     std.log.debug("{any}", .{inst});
     if (inst.exec(self) catch |e| {
-        std.log.err("instruction 0x{x:0>4} at 0x{x:0>3}: {s}", .{ opcode, self.pc, @errorName(e) });
+        if (!@import("builtin").is_test) {
+            std.log.err("instruction 0x{x:0>4} at 0x{x:0>3}: {s}", .{ opcode, self.pc, @errorName(e) });
+        }
         return e;
     }) |new_pc| {
         self.pc = new_pc;

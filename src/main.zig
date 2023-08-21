@@ -4,8 +4,6 @@ const bindings = @import("./bindings.zig");
 extern fn consoleLog(buf: [*]const u8, len: usize) callconv(.C) void;
 
 pub const std_options = struct {
-    pub const log_level = .err;
-
     pub fn logFn(
         comptime level: std.log.Level,
         comptime scope: @TypeOf(.EnumLiteral),

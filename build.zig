@@ -28,12 +28,20 @@ pub fn build(b: *std.Build) void {
     });
     wasm_lib.rdynamic = true;
 
-    const compileStep = wasm_lib.step.cast(std.Build.Step.Compile).?;
-
-    // This declares intent for the executable to be installed into the
-    // standard location when the user invokes the "install" step (the default
-    // step when running `zig build`).
-    b.installArtifact(compileStep);
+    if (optimize == .ReleaseSmall) {
+        // use wasm-opt to make binary smaller
+        const run_wasm_opt = b.addSystemCommand(&.{ "wasm-opt", "-Oz", "--enable-bulk-memory" });
+        run_wasm_opt.addArtifactArg(wasm_lib);
+        run_wasm_opt.addArg("-o");
+        const output_path = run_wasm_opt.addOutputFileArg("zip8.wasm");
+        const optimized_install_step = b.addInstallFile(output_path, "lib/zip8.wasm");
+        b.default_step.dependOn(&optimized_install_step.step);
+    } else {
+        // This declares intent for the executable to be installed into the
+        // standard location when the user invokes the "install" step (the default
+        // step when running `zig build`).
+        b.installArtifact(wasm_lib);
+    }
 
     // Creates a step for unit testing.
     const exe_tests = b.addTest(.{
