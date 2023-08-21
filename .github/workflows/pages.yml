@@ -1,0 +1,34 @@
+name: Compile WASM library and deploy site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.12.0+7ef1eb1c2
+      - run: sudo apt install binaryen
+      - run: zig build -Doptimize=ReleaseSmall
+      - run: rm -rf zig-cache
+      - uses: actions/upload-pages-artifact@v2
+        with:
+          path: '.'
+
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/deploy-pages@v2
