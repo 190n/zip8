@@ -35,7 +35,7 @@ function drawScreen(display) {
 
 }
 
-WebAssembly.compileStreaming(fetch('/zig-out/lib/zip8.wasm')).then(async mod => {
+WebAssembly.compileStreaming(fetch('../zig-out/lib/zip8.wasm')).then(async mod => {
 	const { exports } = await WebAssembly.instantiate(mod, {
 		env: {
 			consoleLog(pointer, size) {
