@@ -1,3 +1,8 @@
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const imageData = ctx.createImageData(64, 32);
+
 function decodeNullTerminatedString(memory, start) {
 	const view = new Uint8Array(memory.buffer);
 	let length = 0;
@@ -15,28 +20,53 @@ function chip8FallibleCall(exports, errPtr, result) {
 	}
 }
 
+function drawScreen(display) {
+	for (let y = 0; y < 32; y += 1) {
+		for (let x = 0; x < 64; x += 1) {
+			const pixel = display[y * 64 + x] * 255;
+			imageData.data[(y * 64 + x) * 4 + 0] = pixel;
+			imageData.data[(y * 64 + x) * 4 + 1] = pixel;
+			imageData.data[(y * 64 + x) * 4 + 2] = pixel;
+			imageData.data[(y * 64 + x) * 4 + 3] = 255;
+		}
+	}
+
+	ctx.putImageData(imageData, 0, 0);
+
+}
+
 WebAssembly.compileStreaming(fetch('/zig-out/lib/zip8.wasm')).then(async mod => {
-	const { exports } = await WebAssembly.instantiate(mod, {});
+	const { exports } = await WebAssembly.instantiate(mod, {
+		env: {
+			consoleLog(pointer, size) {
+				const string = new TextDecoder('utf-8').decode(exports.memory.buffer.slice(pointer, pointer + size));
+				console.log(string);
+			}
+		}
+	});
 	
 	const cpu = exports.chip8CpuAlloc();
 	const errPtr = exports.wasmAlloc(2);
 
-	const program = [
-		0xA2, 0x04,
-		0xD0, 0x01,
-		0x99,
-	];
-	const programBuf = exports.wasmAlloc(program.length);
-	new Uint8Array(exports.memory.buffer).set(program, programBuf);
+	const program = await (await fetch('amogus.ch8')).arrayBuffer();
+	const programBuf = exports.wasmAlloc(program.byteLength);
+	new Uint8Array(exports.memory.buffer).set(new Uint8Array(program), programBuf);
 
-	chip8FallibleCall(exports, errPtr, exports.chip8CpuInit(errPtr, cpu, programBuf, program.length, BigInt(0)));
-
-	// execute 2 instructions
-	for (let i = 0; i < 2; i++) {
-		chip8FallibleCall(exports, errPtr, exports.chip8CpuCycle(errPtr, cpu));
-	}
+	chip8FallibleCall(exports, errPtr, exports.chip8CpuInit(errPtr, cpu, programBuf, program.byteLength, BigInt(Math.floor(Math.random() * 1000))));
 
 	const displayPtr = exports.chip8CpuGetDisplay(cpu);
-	const display = new Uint8Array(exports.memory.buffer.slice(displayPtr, displayPtr + 64 * 32));
-	console.log(display);
+	
+	const instructionsPerTick = 100;
+	
+	requestAnimationFrame(function tick() {
+		requestAnimationFrame(tick);
+		
+		for (let i = 0; i < instructionsPerTick; i++) {
+			chip8FallibleCall(exports, errPtr, exports.chip8CpuCycle(errPtr, cpu));
+		}
+		
+		exports.chip8CpuTimerTick(cpu);
+		const display = new Uint8Array(exports.memory.buffer.slice(displayPtr, displayPtr + 64 * 32));
+		drawScreen(display);
+	});
 });

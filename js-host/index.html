@@ -3,8 +3,16 @@
 	<head>
 		<meta charset="utf-8">
 		<title>Zig CHIP-8</title>
+		<style>
+			canvas {
+				width: 512px;
+				height: 256px;
+				image-rendering: pixelated;
+			}
+		</style>
 	</head>
 	<body>
+		<canvas id="canvas" width="64" height="32"></canvas>
 		<script src="main.js"></script>
 	</body>
 </html>

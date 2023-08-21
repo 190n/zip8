@@ -17,7 +17,7 @@ V: [16]u8 = .{0} ** 16,
 /// 12-bit register I for indexing memory
 I: u12 = 0,
 /// 4 KiB of memory
-mem: [memory_size]u8 = .{0} ** memory_size,
+mem: [memory_size]u8 = [_]u8{0} ** memory_size,
 /// program counter
 pc: u12 = initial_pc,
 /// call stack
@@ -52,14 +52,17 @@ pub fn init(program: []const u8, seed: u64) error{ProgramTooLong}!Cpu {
         return error.ProgramTooLong;
     }
     @memcpy(cpu.mem[initial_pc..].ptr, program);
-    // std.mem.copy(u8, cpu.mem[initial_pc..], program);
     return cpu;
 }
 
 pub fn cycle(self: *Cpu) !void {
     const opcode: u16 = (@as(u16, self.mem[self.pc]) << 8) | self.mem[self.pc + 1];
     const inst = Instruction.decode(opcode);
-    if (try inst.exec(self)) |new_pc| {
+    std.log.debug("{any}", .{inst});
+    if (inst.exec(self) catch |e| {
+        std.log.err("instruction 0x{x:0>4} at 0x{x:0>3}: {s}", .{ opcode, self.pc, @errorName(e) });
+        return e;
+    }) |new_pc| {
         self.pc = new_pc;
     } else {
         self.pc +%= 2;
