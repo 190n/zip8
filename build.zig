@@ -30,7 +30,12 @@ pub fn build(b: *std.Build) void {
 
     if (optimize == .ReleaseSmall) {
         // use wasm-opt to make binary smaller
-        const run_wasm_opt = b.addSystemCommand(&.{ "wasm-opt", "-Oz", "--enable-bulk-memory" });
+        const run_wasm_opt = b.addSystemCommand(&.{
+            "wasm-opt",
+            "-Oz",
+            "--enable-bulk-memory",
+            "--enable-sign-ext",
+        });
         run_wasm_opt.addArtifactArg(wasm_lib);
         run_wasm_opt.addArg("-o");
         const output_path = run_wasm_opt.addOutputFileArg("zip8.wasm");
