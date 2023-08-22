@@ -1,7 +1,11 @@
 const std = @import("std");
 const bindings = @import("./bindings.zig");
 
-extern fn consoleLog(buf: [*]const u8, len: usize) callconv(.C) void;
+// const consoleLog: ?*const fn ([*]const u8, usize) void = switch (@import("builtin").cpu.arch) {
+//     .wasm32 => @extern(?*const fn ([*]const u8, usize) void, .{ .name = "consoleLog" }),
+//     else => null,
+// };
+extern fn consoleLog([*]const u8, usize) void;
 
 pub const std_options = struct {
     pub fn logFn(
@@ -18,7 +22,9 @@ pub const std_options = struct {
 
         var buf: [1024]u8 = undefined;
         const string = std.fmt.bufPrint(&buf, prefix ++ format, args) catch &buf;
-        consoleLog(string.ptr, string.len);
+        if (@import("builtin").cpu.arch == .wasm32) {
+            consoleLog(string.ptr, string.len);
+        }
     }
 };
 

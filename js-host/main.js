@@ -12,10 +12,10 @@ function decodeNullTerminatedString(memory, start) {
 	return new TextDecoder('utf-8').decode(memory.buffer.slice(start, start + length));
 }
 
-function chip8FallibleCall(exports, errPtr, result) {
+function zip8FallibleCall(exports, errPtr, result) {
 	if (result != 0) {
 		const err = new DataView(exports.memory.buffer).getUint16(errPtr, true);
-		const stringPointer = exports.chip8GetErrorName(err);
+		const stringPointer = exports.zip8GetErrorName(err);
 		throw new Error(decodeNullTerminatedString(exports.memory, stringPointer));
 	}
 }
@@ -45,27 +45,27 @@ WebAssembly.compileStreaming(fetch('../zig-out/lib/zip8.wasm')).then(async mod =
 		}
 	});
 	
-	const cpu = exports.chip8CpuAlloc();
+	const cpu = exports.zip8CpuAlloc();
 	const errPtr = exports.wasmAlloc(2);
 
-	const program = await (await fetch('amogus.ch8')).arrayBuffer();
+	const program = await (await fetch('zig2.ch8')).arrayBuffer();
 	const programBuf = exports.wasmAlloc(program.byteLength);
 	new Uint8Array(exports.memory.buffer).set(new Uint8Array(program), programBuf);
 
-	chip8FallibleCall(exports, errPtr, exports.chip8CpuInit(errPtr, cpu, programBuf, program.byteLength, BigInt(Math.floor(Math.random() * 1000))));
+	zip8FallibleCall(exports, errPtr, exports.zip8CpuInit(errPtr, cpu, programBuf, program.byteLength, BigInt(Math.floor(Math.random() * 1000))));
 
-	const displayPtr = exports.chip8CpuGetDisplay(cpu);
+	const displayPtr = exports.zip8CpuGetDisplay(cpu);
 	
-	const instructionsPerTick = 100;
+	const instructionsPerTick = 200;
 	
 	requestAnimationFrame(function tick() {
 		requestAnimationFrame(tick);
 		
 		for (let i = 0; i < instructionsPerTick; i++) {
-			chip8FallibleCall(exports, errPtr, exports.chip8CpuCycle(errPtr, cpu));
+			zip8FallibleCall(exports, errPtr, exports.zip8CpuCycle(errPtr, cpu));
 		}
 		
-		exports.chip8CpuTimerTick(cpu);
+		exports.zip8CpuTimerTick(cpu);
 		const display = new Uint8Array(exports.memory.buffer.slice(displayPtr, displayPtr + 64 * 32));
 		drawScreen(display);
 	});
