@@ -28,6 +28,8 @@ pub fn build(b: *std.Build) void {
     });
     wasm_library.rdynamic = true;
 
+    const wasm_step = b.step("wasm", "Build WebAssembly library");
+
     if (optimize == .ReleaseSmall) {
         // use wasm-opt to make binary smaller
         const run_wasm_opt = b.addSystemCommand(&.{
@@ -39,13 +41,14 @@ pub fn build(b: *std.Build) void {
         run_wasm_opt.addArtifactArg(wasm_library);
         run_wasm_opt.addArg("-o");
         const optimized_wasm_lazy_path = run_wasm_opt.addOutputFileArg("zip8.wasm");
-        const optimized_install_step = b.addInstallFile(optimized_wasm_lazy_path, "lib/zip8.wasm");
-        b.default_step.dependOn(&optimized_install_step.step);
+        const optimized_install_step = b.addInstallLibFile(optimized_wasm_lazy_path, "zip8.wasm");
+        wasm_step.dependOn(&optimized_install_step.step);
     } else {
         // This declares intent for the executable to be installed into the
         // standard location when the user invokes the "install" step (the default
         // step when running `zig build`).
-        b.installArtifact(wasm_library);
+        const wasm_install = b.addInstallLibFile(wasm_library.getEmittedBin(), "zip8.wasm");
+        wasm_step.dependOn(&wasm_install.step);
     }
 
     // build a static library for ARM Cortex-M0+, suitable for RP2040
@@ -61,37 +64,24 @@ pub fn build(b: *std.Build) void {
         },
         .optimize = optimize,
     });
-    b.installArtifact(rp2040_library);
-
-    const zip_root = b.makeTempPath();
-
-    const m0plus_dir = std.fs.path.resolve(b.allocator, &.{ zip_root, "zip8", "src", "cortex-m0plus" }) catch @panic("OOM");
-    const src_dir = m0plus_dir[0..(m0plus_dir.len - "/cortex-m0plus".len)];
-    const zip8_dir = src_dir[0..(src_dir.len - "/src".len)];
-
-    const create_directories = b.addSystemCommand(&.{ "mkdir", "-p", m0plus_dir });
-    const copy_library_properties = b.addSystemCommand(&.{ "cp", b.pathFromRoot("library.properties"), zip8_dir });
-    copy_library_properties.step.dependOn(&create_directories.step);
-    const copy_header = b.addSystemCommand(&.{ "cp", b.pathFromRoot("src/zip8.h"), src_dir });
-    copy_header.step.dependOn(&create_directories.step);
-    const copy_library = b.addSystemCommand(&.{"cp"});
-    copy_library.addArtifactArg(rp2040_library);
-    copy_library.addArg(m0plus_dir);
-    copy_library.step.dependOn(&create_directories.step);
-
-    const zip_step = b.addSystemCommand(&.{ "zip", "-r" });
-    zip_step.cwd = zip_root;
-    const zip_lazy_path = zip_step.addOutputFileArg("zip8.zip");
-    zip_step.step.dependencies.appendSlice(&.{
-        &copy_library_properties.step,
-        &copy_header.step,
-        &copy_library.step,
-    }) catch @panic("OOM");
-    zip_step.addArg("zip8");
-    const zip_install_step = b.addInstallFile(zip_lazy_path, "lib/zip8.zip");
-    b.default_step.dependOn(&zip_install_step.step);
+    const rp2040_library_install = b.addInstallLibFile(rp2040_library.getEmittedBin(), "libzip8.a");
 
     // make a "library" zip file which can be installed in the Arduino IDE
+    const write_files_step = b.addWriteFiles();
+    _ = write_files_step.addCopyFile(rp2040_library.getEmittedBin(), "zip8/src/cortex-m0plus/libzip8.a");
+    _ = write_files_step.addCopyFile(std.build.LazyPath.relative("src/zip8.h"), "zip8/src/zip8.h");
+    _ = write_files_step.addCopyFile(std.build.LazyPath.relative("library.properties"), "zip8/library.properties");
+    const zip_step = b.addSystemCommand(&.{ "sh", "-c", "cd $0; zip -r $1 zip8" });
+    zip_step.addDirectoryArg(write_files_step.getDirectory());
+    const zip_output = zip_step.addOutputFileArg("zip8.zip");
+    const zip_install_step = b.addInstallFile(zip_output, "lib/zip8.zip");
+
+    const arduino_step = b.step("arduino", "Build .zip Arduino library for RP2040 and other Cortex-M0+ chips");
+    arduino_step.dependOn(&zip_install_step.step);
+    arduino_step.dependOn(&rp2040_library_install.step);
+
+    b.default_step.dependOn(wasm_step);
+    b.default_step.dependOn(arduino_step);
 
     // Creates a step for unit testing.
     const exe_tests = b.addTest(.{

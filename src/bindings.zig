@@ -25,7 +25,9 @@ export fn zip8CpuInit(
     program_len: usize,
     seed: u64,
 ) callconv(.C) c_int {
-    cpuPtrCast(cpu).* = Cpu.init(program.?[0..program_len], seed) catch |e| {
+    // directly storing in the pointer breaks this on RP2040 for whatever reason
+    // cpuPtrCast(cpu).* = Cpu.init(program.?[0..program_len], seed) catch |e| {
+    Cpu.initInPlace(cpuPtrCast(cpu), program.?[0..program_len], seed) catch |e| {
         err.?.* = @intFromError(e);
         return 1;
     };

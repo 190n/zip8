@@ -1,13 +1,18 @@
 const std = @import("std");
 const bindings = @import("./bindings.zig");
 
-// const consoleLog: ?*const fn ([*]const u8, usize) void = switch (@import("builtin").cpu.arch) {
-//     .wasm32 => @extern(?*const fn ([*]const u8, usize) void, .{ .name = "consoleLog" }),
-//     else => null,
-// };
-extern fn consoleLog([*]const u8, usize) void;
+extern fn zip8Log([*:0]const u8, usize) void;
+
+pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
+    _ = ret_addr;
+    _ = error_return_trace;
+    zip8Log(@ptrCast(msg.ptr), msg.len);
+    while (true) {}
+}
 
 pub const std_options = struct {
+    pub const log_level = .info;
+
     pub fn logFn(
         comptime level: std.log.Level,
         comptime scope: @TypeOf(.EnumLiteral),
@@ -20,11 +25,9 @@ pub const std_options = struct {
             else => " (" ++ @tagName(scope) ++ "): ",
         };
 
-        var buf: [1024]u8 = undefined;
-        const string = std.fmt.bufPrint(&buf, prefix ++ format, args) catch &buf;
-        if (@import("builtin").cpu.arch == .wasm32) {
-            consoleLog(string.ptr, string.len);
-        }
+        var buf: [1024:0]u8 = undefined;
+        const string = std.fmt.bufPrintZ(&buf, prefix ++ format, args) catch &buf;
+        zip8Log(string.ptr, string.len);
     }
 };
 

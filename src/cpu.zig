@@ -12,6 +12,15 @@ pub const display_height = 32;
 pub const font_base_address = 0x000;
 pub const font_character_size = 5;
 
+// downgrade errors in tests
+const log = if (@import("builtin").is_test) struct {
+    const base = std.log.scoped(.cpu);
+    const err = info;
+    const warn = info;
+    const info = base.info;
+    const debug = base.debug;
+} else std.log.scoped(.cpu);
+
 /// normal 8-bit registers V0-VF
 V: [16]u8 = .{0} ** 16,
 /// 12-bit register I for indexing memory
@@ -42,9 +51,8 @@ dt: u8 = 0,
 /// sound timer, counts down to zero at 60Hz and sound is played if nonzero
 st: u8 = 0,
 
-/// initialize a CPU and copy the program into memory
-pub fn init(program: []const u8, seed: u64) error{ProgramTooLong}!Cpu {
-    var cpu = Cpu{
+pub fn initInPlace(cpu: *Cpu, program: []const u8, seed: u64) error{ProgramTooLong}!void {
+    cpu.* = Cpu{
         .rand = std.rand.DefaultPrng.init(seed),
         .stack = std.BoundedArray(u12, stack_size).init(0) catch unreachable,
     };
@@ -52,17 +60,22 @@ pub fn init(program: []const u8, seed: u64) error{ProgramTooLong}!Cpu {
         return error.ProgramTooLong;
     }
     @memcpy(cpu.mem[initial_pc..].ptr, program);
+    log.info("cpu init", .{});
+}
+
+/// initialize a CPU and copy the program into memory
+pub fn init(program: []const u8, seed: u64) error{ProgramTooLong}!Cpu {
+    var cpu: Cpu = undefined;
+    try initInPlace(&cpu, program, seed);
     return cpu;
 }
 
 pub fn cycle(self: *Cpu) !void {
     const opcode: u16 = (@as(u16, self.mem[self.pc]) << 8) | self.mem[self.pc + 1];
     const inst = Instruction.decode(opcode);
-    std.log.debug("{any}", .{inst});
+    log.debug("{any}", .{inst});
     if (inst.exec(self) catch |e| {
-        if (!@import("builtin").is_test) {
-            std.log.err("instruction 0x{x:0>4} at 0x{x:0>3}: {s}", .{ opcode, self.pc, @errorName(e) });
-        }
+        log.err("instruction 0x{x:0>4} at 0x{x:0>3}: {s}", .{ opcode, self.pc, @errorName(e) });
         return e;
     }) |new_pc| {
         self.pc = new_pc;

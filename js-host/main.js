@@ -38,7 +38,7 @@ function drawScreen(display) {
 WebAssembly.compileStreaming(fetch('../zig-out/lib/zip8.wasm')).then(async mod => {
 	const { exports } = await WebAssembly.instantiate(mod, {
 		env: {
-			consoleLog(pointer, size) {
+			zip8Log(pointer, size) {
 				const string = new TextDecoder('utf-8').decode(exports.memory.buffer.slice(pointer, pointer + size));
 				console.log(string);
 			}
