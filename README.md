@@ -2,6 +2,12 @@
 
 This is a [CHIP-8](https://en.wikipedia.org/wiki/CHIP-8) emulator written in Zig. It's designed to be portable through a minimal interface so that you can embed it on a variety of different platforms. Currently, there's a web wrapper which uses the code compiled to WebAssembly, and it also gets compiled to an Arduino library suitable for the RP2040 (or other Cortex-M0+ microcontrollers).
 
+## Limitations
+
+- The CHIP-8 font (FX29 instruction) is not supported (FX29 works and gives you a memory address, but no sprite data is there).
+- Sound is not exposed via the C API.
+- Keyboard input is exposed but neither host (web or Arduino) uses it yet.
+
 ## Demo
 
 A WebAssembly demo is [hosted on GitHub Pages](https://190n.github.io/zip8/js-host/), displaying a pixelated Zig logo created by @mountfx. This supports display and timer but no sound or input yet. If you have another ROM you can clone this repo and try it out; I'll add support soon to upload a custom ROM within the webpage.
