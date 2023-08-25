@@ -4,7 +4,6 @@ This is a [CHIP-8](https://en.wikipedia.org/wiki/CHIP-8) emulator written in Zig
 
 ## Limitations
 
-- The CHIP-8 font (FX29 instruction) is not supported (FX29 works and gives you a memory address, but no sprite data is there).
 - Sound is not exposed via the C API.
 - Keyboard input is exposed but neither host (web or Arduino) uses it yet.
 
