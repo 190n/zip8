@@ -1,0 +1,224 @@
+:alias x v2
+:alias y v3
+:alias inc v4
+:alias slice_counter v5
+:alias slide_counter v6
+:alias status v7
+:alias delay_amount vd
+:alias scratch ve
+
+: main
+inc := 14
+delay_amount := 5
+loop
+	x := 12
+	if status == 2 then y += 1
+	: changeme1
+	i := enter1
+	slice_counter := 0
+	loop
+		: changeme2
+		sprite x y 1
+		x += 8
+		i += inc
+		slice_counter += 1
+		if slice_counter != 5 then
+	again
+
+	if status != 0 then jump skip_modify
+	i := changeme1
+	load v1
+	v1 -= 1
+	i := changeme1
+	save v1
+	i := changeme2
+	load v1
+	v1 += 1
+	i := changeme2
+	save v1
+	: skip_modify
+	slide_counter += 1
+	
+	:call wait
+	
+	if slide_counter == 13 then status := 1
+	if slide_counter == 14 then status := 2
+	if slide_counter != 21 then
+again
+
+delay_amount := 120
+i := ones
+: flash
+x := 0
+y := 0
+loop
+	loop
+		sprite x y 11
+		x += 8
+		if x != 64 then
+	again
+	x := 0
+	y += 11
+	if y != 33 then
+again
+
+:call wait
+jump flash
+
+: wait
+delay := delay_amount
+loop
+	scratch := delay
+	if scratch != 0 then
+again
+return
+
+: enter14_1
+0x00
+: enter13_1
+0x00
+: enter12_1
+0x7b
+: enter11_1
+0x0c
+: enter10_1
+0x17
+: enter9_1
+0x00
+: enter8_1
+0x01
+: enter7_1
+0x02
+: enter6_1
+0x04
+: enter5_1
+0x08
+: enter4_1
+0x30
+: enter3_1 # 3 rows
+0x6f
+: enter2 # 2 rows
+0x70
+: enter1 # 1 row
+0x40
+
+: enter14_2
+0x01
+: enter13_2
+0x07
+: enter12_2
+0xfb
+: enter11_2
+0x06
+: enter10_2
+0x88
+: enter9_2
+0x90
+: enter8_2
+0x20
+: enter7_2
+0x40
+: enter6_2
+0x80
+: enter5_2
+0xf4
+: enter4_2
+0x18
+: enter3_2 # 1 row
+0xef
+
+0x00 0x00
+
+: enter14_3
+0x00
+: enter13_3
+0x00
+: enter12_3
+0x3f
+: enter11_3
+0x00
+: enter10_3
+0x3e
+: enter9_3
+0x02
+: enter8_3
+0x04
+: enter7_3
+0x09
+: enter6_3
+0x12
+: enter5_3
+0x23
+: enter4_3
+0x00
+: enter3_3 # 1 row
+0x3f
+
+0x00 0x00
+
+: enter14_4
+0x00
+: enter13_4
+0x00
+: enter12_4
+0xec
+: enter11_4
+0x00
+: enter10_4
+0x21
+: enter9_4
+0x40
+: enter8_4
+0x80
+: enter7_4
+0x00
+: enter6_4
+0x00
+: enter5_4
+0xe1
+: enter4_4
+0x00
+: enter3_4 # 1 row
+0xec
+
+0x00 0x00
+
+: enter14_5
+0x00
+: enter13_5
+0x00
+: enter12_5
+0x7c
+: enter11_5
+0x82
+: enter10_5
+0x39
+: enter9_5
+0x47
+: enter8_5
+0x0f
+: enter7_5
+0x0c
+: enter6_5
+0x44
+: enter5_5
+0x39
+: enter4_5
+0x82
+: enter3_5 # 1 row
+0x7c
+0x00
+0x00
+
+: ones
+0xff
+0xff
+0xff
+0xff
+0xff
+0xff
+0xff
+0xff
+0xff
+0xff
+0xff
