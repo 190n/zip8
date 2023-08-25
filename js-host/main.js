@@ -53,11 +53,13 @@ window.onkeyup = e => {
 };
 
 window.ontouchstart = e => {
+	if (e.target.tagName == 'A') return true;
 	e.preventDefault();
 	keys.fill(true);
 };
 
 window.ontouchend = e => {
+	if (e.target.tagName == 'A') return true;
 	e.preventDefault();
 	keys.fill(false);
 }
