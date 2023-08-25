@@ -1,24 +1,9 @@
+import CPU from './cpu.js';
+
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
 const imageData = ctx.createImageData(64, 32);
-
-function decodeNullTerminatedString(memory, start) {
-	const view = new Uint8Array(memory.buffer);
-	let length = 0;
-	while (view[start + length] != 0) {
-		length += 1;
-	}
-	return new TextDecoder('utf-8').decode(memory.buffer.slice(start, start + length));
-}
-
-function zip8FallibleCall(exports, errPtr, result) {
-	if (result != 0) {
-		const err = new DataView(exports.memory.buffer).getUint16(errPtr, true);
-		const stringPointer = exports.zip8GetErrorName(err);
-		throw new Error(decodeNullTerminatedString(exports.memory, stringPointer));
-	}
-}
 
 function drawScreen(display) {
 	for (let y = 0; y < 32; y += 1) {
@@ -32,41 +17,64 @@ function drawScreen(display) {
 	}
 
 	ctx.putImageData(imageData, 0, 0);
-
 }
 
-WebAssembly.compileStreaming(fetch('../zig-out/lib/zip8.wasm')).then(async mod => {
-	const { exports } = await WebAssembly.instantiate(mod, {
-		env: {
-			zip8Log(pointer, size) {
-				const string = new TextDecoder('utf-8').decode(exports.memory.buffer.slice(pointer, pointer + size));
-				console.log(string);
-			}
-		}
-	});
-	
-	const cpu = exports.zip8CpuAlloc();
-	const errPtr = exports.wasmAlloc(2);
+const keys = Array(16).fill(false);
 
-	const program = await (await fetch('zig2.ch8')).arrayBuffer();
-	const programBuf = exports.wasmAlloc(program.byteLength);
-	new Uint8Array(exports.memory.buffer).set(new Uint8Array(program), programBuf);
+const keyBindings = {
+	'1': 0x1,
+	'2': 0x2,
+	'3': 0x3,
+	'4': 0xc,
+	'q': 0x4,
+	'w': 0x5,
+	'e': 0x6,
+	'r': 0xd,
+	'a': 0x7,
+	's': 0x8,
+	'd': 0x9,
+	'f': 0xe,
+	'z': 0xa,
+	'x': 0x0,
+	'c': 0xb,
+	'v': 0xf,
+};
 
-	zip8FallibleCall(exports, errPtr, exports.zip8CpuInit(errPtr, cpu, programBuf, program.byteLength, BigInt(Math.floor(Math.random() * 1000))));
+window.onkeydown = e => {
+	if (e.key in keyBindings) {
+		keys[keyBindings[e.key]] = true;
+	}
+};
 
-	const displayPtr = exports.zip8CpuGetDisplay(cpu);
-	
+window.onkeyup = e => {
+	if (e.key in keyBindings) {
+		keys[keyBindings[e.key]] = false;
+	}
+};
+
+(async () => {
+	const program = await (await fetch('flappybird.ch8')).arrayBuffer();
+	const cpu = new CPU(program, Math.floor(Math.random() * 1000000));
+	await cpu.init();
+
 	const instructionsPerTick = 200;
-	
-	requestAnimationFrame(function tick() {
-		requestAnimationFrame(tick);
+
+	setTimeout(function tick() {
+		setTimeout(tick, 1000 / 60);
+		cpu.setKeys(keys);
 		
-		for (let i = 0; i < instructionsPerTick; i++) {
-			zip8FallibleCall(exports, errPtr, exports.zip8CpuCycle(errPtr, cpu));
-		}
-		
-		exports.zip8CpuTimerTick(cpu);
-		const display = new Uint8Array(exports.memory.buffer.slice(displayPtr, displayPtr + 64 * 32));
-		drawScreen(display);
-	});
-});
+		// if (!cpu.isWaitingForKey()) {
+			for (let i = 0; i < instructionsPerTick; i++) {
+				cpu.cycle();
+			}
+			
+			cpu.timerTick();
+			if (cpu.displayIsDirty()) {
+				const display = cpu.getDisplay();
+				drawScreen(display);
+				cpu.setDisplayNotDirty();
+			}
+		// }
+	}, 1000 / 60);
+
+})();
