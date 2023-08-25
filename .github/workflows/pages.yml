@@ -13,8 +13,8 @@ jobs:
         with:
           version: 0.12.0-dev.125+7ef1eb1c2
       - run: sudo apt install binaryen
-      - run: zig build -Doptimize=ReleaseSmall
-      - run: rm -rf zig-cache
+      - run: zig build wasm -Doptimize=ReleaseSmall
+      - run: rm -rf zig-cache src
       - uses: actions/upload-pages-artifact@v2
         with:
           path: '.'
