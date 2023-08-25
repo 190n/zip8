@@ -52,6 +52,14 @@ window.onkeyup = e => {
 	}
 };
 
+window.ontouchstart = () => {
+	keys.fill(true);
+};
+
+window.ontouchend = () => {
+	keys.fill(false);
+}
+
 (async () => {
 	const program = await (await fetch('flappybird.ch8')).arrayBuffer();
 	const cpu = new CPU(program, Math.floor(Math.random() * 1000000));
