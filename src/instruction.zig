@@ -888,6 +888,9 @@ test "FX29 get address of font" {
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, Cpu.font_base_address + 0xA * Cpu.font_character_size), cpu.I);
+    try std.testing.expectEqualSlices(u8, &.{
+        0xf0, 0x90, 0xf0, 0x90, 0x90,
+    }, cpu.mem[cpu.I..][0..5]);
 }
 
 /// FX33: store the binary-coded decimal version of the value of VX in I, I + 1, and I + 2

@@ -3,6 +3,7 @@ const Cpu = @This();
 const std = @import("std");
 
 const Instruction = @import("./instruction.zig");
+const font_data = @import("./font.zig").font_data;
 
 pub const memory_size = 4096;
 pub const initial_pc = 0x200;
@@ -59,6 +60,7 @@ pub fn initInPlace(cpu: *Cpu, program: []const u8, seed: u64) error{ProgramTooLo
     if (program.len > (memory_size - initial_pc)) {
         return error.ProgramTooLong;
     }
+    @memcpy(cpu.mem[font_base_address..].ptr, font_data);
     @memcpy(cpu.mem[initial_pc..].ptr, program);
     log.info("cpu init", .{});
 }
