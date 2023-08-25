@@ -93,7 +93,6 @@ loop
 	: do_not_add_pipe
 	
 	# draw pipes	
-	if num_pipes == 0 then jump no_pipes
 	scratch := num_pipes
 	scratch2 := 0
 	loop
@@ -136,9 +135,7 @@ loop
 		scratch -= 1
 		if scratch != 0 then
 	again
-	
-	: no_pipes
-	
+		
 	:call draw_bird
 	if collide == 1 then jump gameover
 	
@@ -159,6 +156,15 @@ again
 clear
 :call draw_bird
 :call draw_score
+
+# wait some time
+v0 := 30
+delay := v0
+loop
+	v0 := delay
+	if v0 != 0 then
+again
+
 v0 := 22
 v1 := 5
 i := gameover1
@@ -175,9 +181,6 @@ i := zeroes
 load vf
 clear
 jump main
-
-: halt
-jump halt
 
 : draw_pipe
 i := pipe_shaft
@@ -268,7 +271,6 @@ return
 
 : gameover3
 0xf0
-: pixel
 0x80
 0xc0
 0x80
