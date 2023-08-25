@@ -805,6 +805,7 @@ fn opWaitForKey(self: Instruction, cpu: *Cpu) !?u12 {
 test "FX0A wait for a keypress" {
     var cpu = try Cpu.init(&[_]u8{
         0xF4, 0x0A,
+        0xA4, 0x20,
     }, testing_seed);
 
     // it should stay at the same instruction
@@ -819,6 +820,12 @@ test "FX0A wait for a keypress" {
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0x4]);
     // and the cpu should be continuing past the blocked instruction
     try std.testing.expectEqual(@as(u12, 0x202), cpu.pc);
+    // and it should not think it is waiting anymore
+    try std.testing.expectEqual(@as(?u4, null), cpu.next_key_register);
+
+    // and it should continue nominally
+    try cpu.cycle();
+    try std.testing.expectEqual(@as(u12, 0x420), cpu.I);
 }
 
 /// FX15: set the delay timer to the value of VX
@@ -916,7 +923,7 @@ test "FX33 store BCD" {
 
 /// FX55: store registers [V0, VX] in memory starting at I; set I to I + X + 1
 fn opStore(self: Instruction, cpu: *Cpu) !?u12 {
-    for (0..(self.regX + 1)) |offset| {
+    for (0..(@as(u8, self.regX) + 1)) |offset| {
         cpu.mem[cpu.I] = cpu.V[offset];
         cpu.I +%= 1;
     }
@@ -933,6 +940,8 @@ test "FX55 store registers" {
         0x65, 0xFF, // make sure this is *not* stored
         0xA4, 0x00, // I = 0x400
         0xF4, 0x55,
+        0xA2, 0x00, // try storing all registers
+        0xFF, 0x55,
     }, testing_seed);
     try cpu.cycleN(8, null);
     try std.testing.expectEqual(@as(u12, 0x405), cpu.I);
@@ -942,11 +951,15 @@ test "FX55 store registers" {
         try std.testing.expectEqual(@as(u8, @intCast(val)), cpu.mem[addr]);
     }
     try std.testing.expectEqual(@as(u8, 0), cpu.mem[0x405]);
+
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(cpu.V, cpu.mem[0x200..][0..16].*);
 }
 
 /// FX65: load values from memory starting at I into registers [V0, VX]; set I to I + X + 1
 fn opLoad(self: Instruction, cpu: *Cpu) !?u12 {
-    for (0..(self.regX + 1)) |offset| {
+    for (0..(@as(u8, self.regX) + 1)) |offset| {
         cpu.V[offset] = cpu.mem[cpu.I];
         cpu.I +%= 1;
     }
@@ -955,17 +968,25 @@ fn opLoad(self: Instruction, cpu: *Cpu) !?u12 {
 
 test "FX65 load registers" {
     var cpu = try Cpu.init(&[_]u8{
-        0xA2, 0x04, // set I
+        0xA2, 0x08, // set I
         0xF4, 0x65, // load them
+        0xA4, 0x00,
+        0xFF, 0x65, // test loading all registers
         5, 4, 3, 2, 1, // data to load
         0xFF, // do not load
     }, testing_seed);
     try cpu.cycle();
     try cpu.cycle();
-    try std.testing.expectEqual(@as(u12, 0x209), cpu.I);
+    try std.testing.expectEqual(@as(u12, 0x20d), cpu.I);
     for (0..5) |i| {
         const val = 5 - i;
         try std.testing.expectEqual(@as(u8, @intCast(val)), cpu.V[i]);
     }
+    // value that was not loaded
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0x5]);
+
+    // now try loading all registers
+    try cpu.cycle();
+    try cpu.cycle();
+    try std.testing.expectEqual(std.mem.zeroes([16]u8), cpu.V);
 }

@@ -105,16 +105,21 @@ pub fn timerTick(self: *Cpu) void {
 }
 
 pub fn setKeys(self: *Cpu, new_keys: *const [16]bool) void {
-    if (self.next_key_register) |reg| {
+    if (self.next_key_register) |reg| store_newly_pressed: {
         for (new_keys, self.keys, 0..) |now_pressed, was_pressed, key| {
             if (now_pressed and !was_pressed) {
+                // store the key in the desired register
                 self.V[reg] = @intCast(key);
+                // advance to the next instruction (not waiting anymore)
+                self.pc +%= 2;
+                // indicate that we are not waiting anymore
+                self.next_key_register = null;
+                // exit the loop so we don't advance 2 instructions if 2 keys are pressed at once
+                break :store_newly_pressed;
             }
         }
-        self.pc +%= 2;
-    } else {
-        @memcpy(&self.keys, new_keys);
     }
+    @memcpy(&self.keys, new_keys);
 }
 
 test "Cpu.init" {
