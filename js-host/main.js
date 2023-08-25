@@ -63,7 +63,7 @@ window.onkeyup = e => {
 		setTimeout(tick, 1000 / 60);
 		cpu.setKeys(keys);
 		
-		// if (!cpu.isWaitingForKey()) {
+		if (!cpu.isWaitingForKey()) {
 			for (let i = 0; i < instructionsPerTick; i++) {
 				cpu.cycle();
 			}
@@ -74,7 +74,7 @@ window.onkeyup = e => {
 				drawScreen(display);
 				cpu.setDisplayNotDirty();
 			}
-		// }
+		}
 	}, 1000 / 60);
 
 })();
