@@ -1,0 +1,297 @@
+:alias carry vf
+:alias no_borrow vf
+:alias collide vf
+
+:alias scratch ve
+:alias scratch2 v4
+:alias scratch3 v3
+
+:alias y_hi va
+:alias y_lo vb
+:alias dy_hi vc
+:alias dy_lo vd
+
+:alias x v9
+
+:alias num_pipes v8
+
+:alias frame_count v7
+
+:alias score v6
+
+:const delay_amount 1
+
+:const gravity 16
+
+:const jumpkey 0xe
+
+:alias pipe_x v0
+:alias pipe_center v1
+
+:alias hundreds v0
+:alias tens v1
+:alias ones v2
+
+:const score_x 49
+:const score_y 1
+
+:const scratchmem 0x400
+:const zeroes 0x500
+
+:const pipe_data 0x600
+:calc pipe_data_plus { 2 + pipe_data }
+
+: main
+x := 8
+y_hi := 12
+
+loop
+	# apply velocity
+	y_lo += dy_lo
+	if carry == 1 then y_hi += 1
+	y_hi += dy_hi
+	
+	# apply gravity
+	scratch := gravity
+	dy_lo += scratch
+	if carry == 1 then dy_hi += 1
+	
+	scratch := 0b00100000
+	scratch &= y_hi
+	if scratch != 0 then jump gameover
+	
+	# jump
+	scratch := jumpkey
+	if scratch -key then jump do_not_jump
+	dy_lo := 0x60
+	dy_hi := 0xff
+	
+	: do_not_jump
+	
+	# add a pipe
+	scratch := 0b01111111
+	scratch &= frame_count
+	if scratch != 0 then jump do_not_add_pipe
+	
+	# calculate new pipe
+	pipe_x := 63
+	loop
+		pipe_center := random 0b1111
+		scratch := 12
+		scratch -= pipe_center
+		if no_borrow == 0 then
+	again
+	pipe_center += 10
+	
+	# store it
+	scratch <<= num_pipes
+	i := pipe_data
+	i += scratch
+	save v1
+	num_pipes += 1
+	
+	: do_not_add_pipe
+	
+	# draw pipes	
+	if num_pipes == 0 then jump no_pipes
+	scratch := num_pipes
+	scratch2 := 0
+	loop
+		i := pipe_data
+		i += scratch2
+		load v1
+		:call draw_pipe
+		scratch3 := 3
+		scratch3 &= frame_count
+		if scratch3 != 0 then jump no_shift_pipes
+		scratch3 := 1
+		pipe_x -= scratch3
+		if no_borrow == 0 then jump remove_pipe
+		: no_shift_pipes
+		i := pipe_data
+		i += scratch2
+		save v1
+		scratch2 += 2
+		jump no_remove_pipe
+		
+		: remove_pipe
+		num_pipes -= 1
+		score += 1
+		
+		i := scratchmem
+		save vf
+		
+		# janky memmove() to copy all the pipe data backwards
+		i := pipe_data_plus
+		load v5
+		i := pipe_data
+		save v5
+		
+		
+		i := scratchmem
+		load vf
+		
+		: no_remove_pipe
+		
+		scratch -= 1
+		if scratch != 0 then
+	again
+	
+	: no_pipes
+	
+	:call draw_bird
+	if collide == 1 then jump gameover
+	
+	:call draw_score
+	
+	# wait 1 frame
+	scratch := delay_amount
+	delay := scratch
+	loop
+		scratch := delay
+		if scratch != 0 then
+	again
+	clear
+	frame_count += 1
+again
+
+: gameover
+clear
+:call draw_bird
+:call draw_score
+v0 := 22
+v1 := 5
+i := gameover1
+sprite v0 v1 11
+v0 += 8
+i := gameover2
+sprite v0 v1 11
+v0 += 8
+i := gameover3
+sprite v0 v1 11
+
+v0 := key
+i := zeroes
+load vf
+clear
+jump main
+
+: halt
+jump halt
+
+: draw_pipe
+i := pipe_shaft
+scratch3 := 0
+sprite pipe_x scratch3 8
+scratch3 += 8
+sprite pipe_x scratch3 8
+scratch3 += 8
+sprite pipe_x scratch3 8
+scratch3 += 8
+sprite pipe_x scratch3 8
+pipe_center += 6
+sprite pipe_x pipe_center 4
+pipe_center -= 8
+sprite pipe_x pipe_center 8
+pipe_center -= 8
+sprite pipe_x pipe_center 8
+i := pipe_end
+sprite pipe_x pipe_center 4
+pipe_center += 16
+sprite pipe_x pipe_center 4
+pipe_center -= 6
+return
+
+: draw_bird
+# check if facing up or down
+scratch := 0x80
+scratch &= dy_hi
+# draw bird
+if scratch == 0x80 then i := bird_up
+if scratch == 0x00 then i := bird_down
+sprite x y_hi 4
+return
+
+: draw_score
+i := scratchmem
+bcd score
+load v2
+
+scratch := score_x
+scratch2 := score_y
+i := hex hundreds
+sprite scratch scratch2 5
+scratch += 5
+i := hex tens
+sprite scratch scratch2 5
+scratch += 5
+i := hex ones
+sprite scratch scratch2 5
+scratch += 5
+return
+
+: bird_up
+0x00
+0x30
+0xf0
+: bird_down
+0xc0
+0xf0
+0x30
+0x00
+
+: gameover1
+0xf3
+0x84
+0xb7
+0x94
+0xf4
+0x00
+0xf4
+0x94
+0x94
+0x92
+0xf1
+
+: gameover2
+0x22
+0xb6
+0xaa
+0xa2
+0xa2
+0x00
+0x5e
+0x50
+0x58
+0x90
+0x1e
+
+: gameover3
+0xf0
+: pixel
+0x80
+0xc0
+0x80
+0xf0
+0x00
+0xe0
+0x90
+0xe0
+0x90
+0x90
+
+: pipe_end
+0xff
+0x81
+0x81
+0xff
+
+: pipe_shaft
+0x42
+0x42
+0x42
+0x42
+0x42
+0x42
+0x42
+0x42
