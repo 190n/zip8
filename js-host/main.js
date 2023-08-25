@@ -52,11 +52,13 @@ window.onkeyup = e => {
 	}
 };
 
-window.ontouchstart = () => {
+window.ontouchstart = e => {
+	e.preventDefault();
 	keys.fill(true);
 };
 
-window.ontouchend = () => {
+window.ontouchend = e => {
+	e.preventDefault();
 	keys.fill(false);
 }
 

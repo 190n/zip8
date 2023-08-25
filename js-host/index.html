@@ -2,12 +2,29 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1">
 		<title>Zig CHIP-8</title>
 		<style>
 			canvas {
 				width: 512px;
 				height: 256px;
 				image-rendering: pixelated;
+			}
+
+			@media screen and (max-width: 550px) {
+				canvas {
+					width: 320px;
+					height: 160px;
+				}
+			}
+
+			html, body {
+				width: 100%;
+				height: 100%;
+			}
+
+			* {
+				touch-action: manipulation;
 			}
 		</style>
 	</head>
