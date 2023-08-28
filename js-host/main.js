@@ -2,6 +2,7 @@ import CPU from './cpu.js';
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+const output = document.getElementById('output');
 
 const imageData = ctx.createImageData(64, 32);
 
@@ -64,20 +65,35 @@ window.ontouchend = e => {
 	keys.fill(false);
 }
 
-(async () => {
-	const program = await (await fetch('flappybird.ch8')).arrayBuffer();
-	const cpu = new CPU(program, Math.floor(Math.random() * 1000000));
+let timeout = null;
+
+async function run(rom) {
+	if (timeout !== null) clearTimeout(timeout);
+
+	output.innerHTML = '';
+
+	const cpu = new CPU(rom, Math.floor(Math.random() * 1000000));
 	await cpu.init();
 
 	const instructionsPerTick = 200;
 
-	setTimeout(function tick() {
-		setTimeout(tick, 1000 / 60);
+	let halt = false;
+
+	function tick() {
+		if (halt) return;
+		timeout = setTimeout(tick, 1000 / 60);
 		cpu.setKeys(keys);
 		
 		if (!cpu.isWaitingForKey()) {
-			for (let i = 0; i < instructionsPerTick; i++) {
-				cpu.cycle();
+			for (let i = 0; i < instructionsPerTick && !halt; i++) {
+				try {
+					cpu.cycle();
+				} catch (e) {
+					halt = true;
+					output.innerHTML = `Error: ${e.message}<br>
+						at 0x${cpu.getProgramCounter().toString(16).padStart(3, '0')},
+						instruction 0x${cpu.getInstruction().toString(16).padStart(4, '0')}`;
+				}
 			}
 			
 			cpu.timerTick();
@@ -87,6 +103,29 @@ window.ontouchend = e => {
 				cpu.setDisplayNotDirty();
 			}
 		}
-	}, 1000 / 60);
+	}
 
+	tick();
+}
+
+async function loadRom() {
+	const url = this.dataset.romUrl;
+	run(await (await fetch(url)).arrayBuffer());
+}
+
+for (const e of document.getElementsByClassName('rom-loader')) {
+	e.onclick = loadRom;
+}
+
+document.getElementById('upload').onchange = e => {
+	const file = e.target.files[0];
+	const reader = new FileReader();
+	reader.onload = () => {
+		run(reader.result);
+	};
+	reader.readAsArrayBuffer(file);
+}
+
+(async () => {
+	run(await (await fetch('flappybird.ch8')).arrayBuffer());
 })();

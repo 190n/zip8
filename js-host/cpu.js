@@ -81,4 +81,12 @@ export default class CPU {
 	setDisplayNotDirty() {
 		this.instance.exports.zip8CpuSetDisplayNotDirty(this.cpu);
 	}
+
+	getInstruction() {
+		return this.instance.exports.zip8CpuGetInstruction(this.cpu);
+	}
+
+	getProgramCounter() {
+		return this.instance.exports.zip8CpuGetProgramCounter(this.cpu);
+	}
 }

@@ -21,6 +21,7 @@
 			html, body {
 				width: 100%;
 				height: 100%;
+				font-family: system-ui, sans-serif;
 			}
 
 			* {
@@ -30,17 +31,96 @@
 			a {
 				touch-action: auto;
 			}
+
+			table, th {
+				border: thin solid black;
+				border-collapse: collapse;
+				padding: 2px;
+				text-align: center;
+			}
+
+			td {
+				width: 2.5ch;
+				border: thin dotted black;
+			}
+
+			td:nth-child(4) {
+				border-right: thin solid black;
+			}
 		</style>
 	</head>
 	<body>
 		<canvas id="canvas" width="64" height="32"></canvas>
 		<p>
-			Press F to flap; after game over press any key to restart. Or you can touch anywhere on
-			the screen.
+			Flappy Bird controls: Press CHIP-8 key E, which is F on your keyboard, to flap; after
+			game over press any key to restart. Or you can touch anywhere on the screen.
 		</p>
 		<p>
 			<a href="https://github.com/190n/zip8">source + more info</a>
 		</p>
+		<p>
+			Load ROM:
+			<button class="rom-loader" data-rom-url="flappybird.ch8">Flappy Bird</button>
+			<button class="rom-loader" data-rom-url="zig.ch8">Zig logo</button>
+			<button class="rom-loader" data-rom-url="amogus.ch8">Sus</button>
+		</p>
+		<p>
+			Upload ROM: <input type="file" id="upload">
+		</p>
+		<p>
+			Key mapping:
+		</p>
+		<table>
+			<thead>
+				<tr>
+					<th colspan="4">QWERTY</th>
+					<th colspan="4">CHIP-8</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td>1</td>
+					<td>2</td>
+					<td>3</td>
+					<td>4</td>
+					<td>1</td>
+					<td>2</td>
+					<td>3</td>
+					<td>C</td>
+				</tr>
+				<tr>
+					<td>Q</td>
+					<td>W</td>
+					<td>E</td>
+					<td>R</td>
+					<td>4</td>
+					<td>5</td>
+					<td>6</td>
+					<td>D</td>
+				</tr>
+				<tr>
+					<td>A</td>
+					<td>S</td>
+					<td>D</td>
+					<td>F</td>
+					<td>7</td>
+					<td>8</td>
+					<td>9</td>
+					<td>E</td>
+				</tr>
+				<tr>
+					<td>Z</td>
+					<td>X</td>
+					<td>C</td>
+					<td>V</td>
+					<td>A</td>
+					<td>0</td>
+					<td>B</td>
+					<td>F</td>
+				</tr>
+			</tbody>
+		</table>
+		<p id="output"></p>
 		<script src="main.js" type="module"></script>
 	</body>
 </html>
