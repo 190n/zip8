@@ -70,9 +70,12 @@ let timeout = null;
 async function run(rom) {
 	if (timeout !== null) clearTimeout(timeout);
 
+	const key = 'zip8Flags';
+	const initialFlags = localStorage.getItem(key) === null ? Array(8).fill(0) : JSON.parse(localStorage.getItem(key));
+
 	output.innerHTML = '';
 
-	const cpu = new CPU(rom, Math.floor(Math.random() * 1000000));
+	const cpu = new CPU(rom, Math.floor(Math.random() * 1000000), initialFlags);
 	await cpu.init();
 
 	const instructionsPerTick = 200;
@@ -101,6 +104,11 @@ async function run(rom) {
 				const display = cpu.getDisplay();
 				drawScreen(display);
 				cpu.setDisplayNotDirty();
+			}
+
+			if (cpu.flagsAreDirty()) {
+				const flags = cpu.getFlags();
+				localStorage.setItem(key, JSON.stringify(flags));
 			}
 		}
 	}

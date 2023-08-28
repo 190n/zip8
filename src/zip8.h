@@ -30,6 +30,11 @@ extern const uint16_t ZIP8_ERR_BAD_RETURN;
 extern const uint16_t ZIP8_ERR_PROGRAM_TOO_LONG;
 
 /**
+ * Error returned when the program tries to save or load more than 8 flag registers
+*/
+extern const uint16_t ZIP8_ERR_FLAG_OVERFLOW;
+
+/**
  * Converts an error code into a null-terminated string
  *
  * err: an error code obtained via a ZIP-8 function's `err` parameter
@@ -50,10 +55,12 @@ size_t zip8CpuGetSize(void);
  * program:     code for the CPU to execute, copied into memory at address 0x200
  * program_len: how many bytes of the ROM should be copied into memory
  * seed:        seed for random number generation
+ * flags:       initial value for the eight 8-bit flags used to store data between executions, in
+ *              little-endian order
  *
  * Returns zero for success, nonzero (and stores a code in *err) for error
 */
-int zip8CpuInit(uint16_t *err, void *cpu, const uint8_t *program, size_t program_len, uint64_t seed);
+int zip8CpuInit(uint16_t *err, void *cpu, const uint8_t *program, size_t program_len, uint64_t seed, uint64_t flags);
 
 /**
  * Executes one instruction on a ZIP-8 CPU
@@ -139,6 +146,26 @@ uint16_t zip8CpuGetInstruction(const void *cpu);
  * Get the program counter of a ZIP-8 CPU
 */
 uint16_t zip8CpuGetProgramCounter(const void *cpu);
+
+/**
+ * Read the flag registers of a ZIP-8 CPU (eight 8-bit flags in big-endian order)
+*/
+uint64_t zip8CpuGetFlags(const void *cpu);
+
+/**
+ * Check whether a ZIP-8 CPU's flags have changed since the last time the dirty flag was cleared
+ *
+ * cpu: opaque pointer for CPU data
+*/
+bool zip8CpuFlagsAreDirty(const void *cpu);
+
+/**
+ * Clear the dirty flag on a ZIP-8 CPU (to indicate that your application has stored the most recent
+ * flags)
+ *
+ * cpu: opaque pointer for CPU data
+*/
+void zip8CpuSetFlagsNotDirty(void *cpu);
 
 #ifdef __cplusplus
 }

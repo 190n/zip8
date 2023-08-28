@@ -52,10 +52,16 @@ dt: u8 = 0,
 /// sound timer, counts down to zero at 60Hz and sound is played if nonzero
 st: u8 = 0,
 
-pub fn initInPlace(cpu: *Cpu, program: []const u8, seed: u64) error{ProgramTooLong}!void {
+/// flags to store data between program runs
+flags: [8]u8,
+/// whether flags have changed since the host saved them
+flags_dirty: bool = false,
+
+pub fn initInPlace(cpu: *Cpu, program: []const u8, seed: u64, flags: [8]u8) error{ProgramTooLong}!void {
     cpu.* = Cpu{
         .rand = std.rand.DefaultPrng.init(seed),
         .stack = std.BoundedArray(u12, stack_size).init(0) catch unreachable,
+        .flags = flags,
     };
     if (program.len > (memory_size - initial_pc)) {
         return error.ProgramTooLong;
@@ -66,9 +72,9 @@ pub fn initInPlace(cpu: *Cpu, program: []const u8, seed: u64) error{ProgramTooLo
 }
 
 /// initialize a CPU and copy the program into memory
-pub fn init(program: []const u8, seed: u64) error{ProgramTooLong}!Cpu {
+pub fn init(program: []const u8, seed: u64, flags: [8]u8) error{ProgramTooLong}!Cpu {
     var cpu: Cpu = undefined;
-    try initInPlace(&cpu, program, seed);
+    try initInPlace(&cpu, program, seed, flags);
     return cpu;
 }
 
@@ -123,7 +129,7 @@ pub fn setKeys(self: *Cpu, new_keys: *const [16]bool) void {
 }
 
 test "Cpu.init" {
-    const cpu = try Cpu.init("abc", undefined);
+    const cpu = try Cpu.init("abc", 0, .{0} ** 8);
     try std.testing.expectEqualSlices(u8, &(.{0} ** 16), &cpu.V);
     try std.testing.expectEqual(@as(u12, 0), cpu.I);
     // should be the program then a bunch of zeros
@@ -137,7 +143,10 @@ test "Cpu.init" {
 
     try std.testing.expectEqualSlices(bool, &(.{false} ** 16), &cpu.keys);
 
-    try std.testing.expectError(error.ProgramTooLong, Cpu.init(&(.{0} ** (memory_size - initial_pc + 1)), undefined));
+    try std.testing.expectError(
+        error.ProgramTooLong,
+        Cpu.init(&(.{0} ** (memory_size - initial_pc + 1)), 0, .{0} ** 8),
+    );
 }
 
 test "Cpu.cycle with a basic program" {
@@ -147,7 +156,7 @@ test "Cpu.cycle with a basic program" {
         0x80, 0x14, // V0 += V1 (0x13 with carry)
         0x12, 0x06, // jump to 0x206 (infinite loop)
     };
-    var cpu = try Cpu.init(&program, undefined);
+    var cpu = try Cpu.init(&program, 0, .{0} ** 8);
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0xC0), cpu.V[0x0]);
     try cpu.cycle();
@@ -174,7 +183,7 @@ test "Cpu.cycleN" {
         0x70, 0x00,
         // illegal
         0x00, 0x00,
-    }, undefined);
+    }, 0, .{0} ** 8);
 
     var completed: usize = 0;
     try cpu.cycleN(2, &completed);

@@ -18,9 +18,10 @@ function decodeNullTerminatedString(memory, start) {
 export default class CPU {
 	static wasmModule = null;
 
-	constructor(program, seed) {
+	constructor(program, seed, initialFlags) {
 		this.program = program;
 		this.seed = seed;
+		this.initialFlags = initialFlags;
 	}
 
 	call(name, ...args) {
@@ -44,7 +45,11 @@ export default class CPU {
 		const programBuf = this.instance.exports.wasmAlloc(this.program.byteLength);
 		new Uint8Array(this.instance.exports.memory.buffer).set(new Uint8Array(this.program), programBuf);
 
-		this.call('zip8CpuInit', this.cpu, programBuf, this.program.byteLength, BigInt(this.seed));
+		let flagsNum = 0n;
+		for (let i = 0; i < 8; i++) {
+			flagsNum |= BigInt(this.initialFlags[i]) << BigInt(8 * i);
+		}
+		this.call('zip8CpuInit', this.cpu, programBuf, this.program.byteLength, BigInt(this.seed), flagsNum);
 	}
 
 	cycle() {
@@ -88,5 +93,22 @@ export default class CPU {
 
 	getProgramCounter() {
 		return this.instance.exports.zip8CpuGetProgramCounter(this.cpu);
+	}
+
+	flagsAreDirty() {
+		return this.instance.exports.zip8CpuFlagsAreDirty(this.cpu);
+	}
+
+	setFlagsNotDirty() {
+		this.instance.exports.zip8CpuSetFlagsNotDirty(this.cpu);
+	}
+
+	getFlags() {
+		const flags = Array(8).fill(0);
+		const flagsNum = this.instance.exports.zip8CpuGetFlags(this.cpu);
+		for (let i = 0; i < 8; i++) {
+			flags[i] = Number(flagsNum >> BigInt(8 * i)) & 0xff;
+		}
+		return flags;
 	}
 }

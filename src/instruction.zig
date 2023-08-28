@@ -66,6 +66,7 @@ pub const ExecutionError = error{
     NotImplemented,
     StackOverflow,
     BadReturn,
+    FlagOverflow,
 };
 
 /// a function that executes an instruction and optionally returns the new program counter
@@ -129,7 +130,7 @@ fn op00EX(self: Instruction, cpu: *Cpu) !?u12 {
 test "00E0 clear screen" {
     var cpu = try Cpu.init(&[_]u8{
         0x00, 0xE0,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     // fill screen
     @memset(&cpu.display, true);
     try cpu.cycle();
@@ -145,7 +146,7 @@ test "00EE return" {
         0x00, 0x00,
         0x00, 0x00,
         0x00, 0xEE, // return again but now the stack is empty
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     // set up somewhere to return to
     try cpu.stack.append(0x206);
     try cpu.cycle();
@@ -165,7 +166,7 @@ fn opJump(self: Instruction, cpu: *const Cpu) !?u12 {
 test "1NNN jump" {
     var cpu = try Cpu.init(&[_]u8{
         0x15, 0x62, // jump to 0x562
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, 0x562), cpu.pc);
 }
@@ -185,7 +186,7 @@ test "2NNN call" {
         0x00, 0x00,
         0x00, 0x00,
         0x12, 0x00, // 0x208: jump back to 0x200
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
 
     // fill up the stack
     for (0..Cpu.stack_size) |i| {
@@ -218,7 +219,7 @@ test "3XNN skip if VX == NN" {
         0x00, 0x00, // skipped
         0x33, 0x20, // won't skip
         0x32, 0x58, // won't skip
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
 
     try cpu.cycle();
     try cpu.cycle();
@@ -241,7 +242,7 @@ test "4XNN skip if VX != NN" {
         0x00, 0x00, // skipped
         0x43, 0x58, // won't skip
         0x42, 0x58, // skip
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
 
     try cpu.cycle();
     try cpu.cycle();
@@ -270,7 +271,7 @@ test "5XY0 skip if VX == VY" {
         0x00, 0x00, // skipped
         0x50, 0x20, // won't skip
         0x50, 0x11, // error
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     // initialize registers
     try cpu.cycle();
     try cpu.cycle();
@@ -294,7 +295,7 @@ test "6XNN set VX to NN" {
     var cpu = try Cpu.init(&[_]u8{
         0x60, 0x2F,
         0x61, 0x68,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x2F), cpu.V[0x0]);
     try cpu.cycle();
@@ -312,7 +313,7 @@ test "7XNN add NN to VX" {
         0x70, 0x53,
         0x70, 0xFF,
         0x71, 0x28,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     // V0 = 0x53
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x53), cpu.V[0x0]);
@@ -362,7 +363,7 @@ test "illegal arithmetic opcodes" {
     for ([_]u8{ 0x8, 0x9, 0xA, 0xB, 0xC, 0xD, 0xF }) |lsd| {
         var cpu = try Cpu.init(&[_]u8{
             0x80, 0x10 | lsd,
-        }, testing_seed);
+        }, testing_seed, .{0} ** 8);
         try std.testing.expectError(error.IllegalOpcode, cpu.cycle());
     }
 }
@@ -379,7 +380,7 @@ test "8XY0 set VX to VY" {
         0x60, 0x38,
         0x81, 0x00,
         0x80, 0x20,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x38), cpu.V[0x1]);
@@ -399,7 +400,7 @@ test "8XY1 bitwise OR" {
         0x60, 0x55,
         0x61, 0x33,
         0x80, 0x11,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0x77), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
@@ -416,7 +417,7 @@ test "8XY2 bitwise AND" {
         0x60, 0x55,
         0x61, 0x33,
         0x80, 0x12,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0x11), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
@@ -433,7 +434,7 @@ test "8XY3 bitwise XOR" {
         0x60, 0x55,
         0x61, 0x33,
         0x80, 0x13,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0x66), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0x33), cpu.V[0x1]);
@@ -453,7 +454,7 @@ test "8XY4 add registers" {
         0x80, 0x14,
         0x61, 26,
         0x80, 0x14,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, @truncate(294)), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
@@ -477,7 +478,7 @@ test "8XY5 subtract registers" {
         0x60, 13,
         0x61, 59,
         0x80, 0x15,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
@@ -498,7 +499,7 @@ test "8XY6 shift right" {
         0x61, 0b01011001,
         0x80, 0x16,
         0x80, 0x06,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0b00101100), cpu.V[0x0]);
@@ -523,7 +524,7 @@ test "8XY7 subtract registers in reverse" {
         0x60, 59,
         0x61, 13,
         0x80, 0x17,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
@@ -544,7 +545,7 @@ test "8XYE shift left" {
         0x61, 0b10010110,
         0x80, 0x1E,
         0x80, 0x0E,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0b00101100), cpu.V[0x0]);
@@ -572,7 +573,7 @@ test "9XY0 skip if VX != VY" {
         0x00, 0x00, // skipped
         0x93, 0x20, // won't skip
         0x90, 0x11, // error
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     // initialize registers
     try cpu.cycle();
     try cpu.cycle();
@@ -595,7 +596,7 @@ fn opSetIImm(self: Instruction, cpu: *Cpu) !?u12 {
 test "ANNN set I" {
     var cpu = try Cpu.init(&[_]u8{
         0xA6, 0x83,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, 0x683), cpu.I);
 }
@@ -609,7 +610,7 @@ test "BNNN jump adding V0" {
     var cpu = try Cpu.init(&[_]u8{
         0x60, 0x58,
         0xB4, 0xC3,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, 0x58 + 0x4C3), cpu.pc);
@@ -628,7 +629,7 @@ test "CXNN random" {
         0xC0, 0xFF,
         0xC0, 0x07,
         0xC0, 0x00,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try std.testing.expectEqual(rand.int(u8), cpu.V[0x0]);
     try cpu.cycle();
@@ -684,7 +685,7 @@ test "DXYN draw" {
     };
     // calculate padding so the sprites start at 0x300
     const rom = program ++ ([1]u8{0} ** (0x100 - program.len)) ++ sprites;
-    var cpu = try Cpu.init(&rom, testing_seed);
+    var cpu = try Cpu.init(&rom, testing_seed, .{0} ** 8);
 
     try cpu.cycleN(5, null);
     // VF should be cleared
@@ -724,7 +725,7 @@ test "illegal EXYZ opcodes" {
         if (low8 != 0x9E and low8 != 0xA1) {
             var cpu = try Cpu.init(&[_]u8{
                 0xE0, @as(u8, @intCast(low8)),
-            }, testing_seed);
+            }, testing_seed, .{0} ** 8);
             try std.testing.expectError(error.IllegalOpcode, cpu.cycle());
         }
     }
@@ -736,7 +737,7 @@ test "EX9E skip if pressed" {
         0xE0, 0x9E, // skip if 5 pressed (yes)
         0x00, 0x00, // skipped
         0xE1, 0x9E, // skip if 0 pressed (V1 still zeroed) (no)
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     cpu.keys[5] = true;
     try cpu.cycle();
     try cpu.cycle();
@@ -752,7 +753,7 @@ test "EXA1 skip if not pressed" {
         0x60, 0x05, // check key 5
         0xE0, 0xA1, // skip if 5 not pressed (no)
         0xE1, 0xA1, // skip if 0 not pressed (V1 still zeroed) (yes)
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     cpu.keys[5] = true;
     try cpu.cycle();
     try cpu.cycle();
@@ -776,6 +777,8 @@ fn opFXYZ(self: Instruction, cpu: *Cpu) !?u12 {
         fns[0x33] = opStoreBCD;
         fns[0x55] = opStore;
         fns[0x65] = opLoad;
+        fns[0x75] = opSaveFlags;
+        fns[0x85] = opLoadFlags;
         break :blk fns;
     };
 
@@ -789,7 +792,7 @@ fn opStoreDT(self: Instruction, cpu: *Cpu) !?u12 {
 }
 
 test "FX07 get DT" {
-    var cpu = try Cpu.init(&[_]u8{ 0xF0, 0x07 }, testing_seed);
+    var cpu = try Cpu.init(&[_]u8{ 0xF0, 0x07 }, testing_seed, .{0} ** 8);
     cpu.dt = 30;
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 30), cpu.V[0x0]);
@@ -806,7 +809,7 @@ test "FX0A wait for a keypress" {
     var cpu = try Cpu.init(&[_]u8{
         0xF4, 0x0A,
         0xA4, 0x20,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
 
     // it should stay at the same instruction
     for (0..5) |_| {
@@ -838,7 +841,7 @@ test "FX15 set DT" {
     var cpu = try Cpu.init(&[_]u8{
         0x60, 0x10,
         0xF0, 0x15,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x10), cpu.dt);
@@ -854,7 +857,7 @@ test "FX18 set ST" {
     var cpu = try Cpu.init(&[_]u8{
         0x60, 0x10,
         0xF0, 0x18,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u8, 0x10), cpu.st);
@@ -874,7 +877,7 @@ test "FX1E increment I by register" {
         0xAF, 0xFF, // I = 0xFFF
         0x62, 0x02, // V2 = 0x02
         0xF2, 0x1E, // I += V2 (overflows)
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u12, 0x51F), cpu.I);
     try cpu.cycleN(3, null);
@@ -891,7 +894,7 @@ test "FX29 get address of font" {
     var cpu = try Cpu.init(&[_]u8{
         0x60, 0x3A, // V0 = 0x3A
         0xF0, 0x29, // get that character
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, Cpu.font_base_address + 0xA * Cpu.font_character_size), cpu.I);
@@ -914,7 +917,7 @@ test "FX33 store BCD" {
         0x60, 83, // V0 = 83
         0xA3, 0x00, // I = 0x300
         0xF0, 0x33, // store BCD of V0
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 0), cpu.mem[0x300]);
     try std.testing.expectEqual(@as(u8, 8), cpu.mem[0x301]);
@@ -942,7 +945,7 @@ test "FX55 store registers" {
         0xF4, 0x55,
         0xA2, 0x00, // try storing all registers
         0xFF, 0x55,
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycleN(8, null);
     try std.testing.expectEqual(@as(u12, 0x405), cpu.I);
     for (0..5) |i| {
@@ -974,7 +977,7 @@ test "FX65 load registers" {
         0xFF, 0x65, // test loading all registers
         5, 4, 3, 2, 1, // data to load
         0xFF, // do not load
-    }, testing_seed);
+    }, testing_seed, .{0} ** 8);
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(@as(u12, 0x20d), cpu.I);
@@ -989,4 +992,40 @@ test "FX65 load registers" {
     try cpu.cycle();
     try cpu.cycle();
     try std.testing.expectEqual(std.mem.zeroes([16]u8), cpu.V);
+}
+
+fn opSaveFlags(self: Instruction, cpu: *Cpu) !?u12 {
+    if (self.regX > 8) return error.FlagOverflow;
+    @memcpy(cpu.flags[0 .. self.regX + 1], cpu.V[0 .. self.regX + 1]);
+    cpu.flags_dirty = true;
+    return null;
+}
+
+test "FX75 save flags" {
+    var cpu = try Cpu.init(&[_]u8{
+        0x60, 0x11, // some values to be saved in the flags
+        0x61, 0x22,
+        0x62, 0x33, // this one is not saved
+        0xF1, 0x75,
+    }, testing_seed, .{0} ** 7 ++ .{0xff});
+    try std.testing.expect(!cpu.flags_dirty);
+    try cpu.cycleN(4, null);
+    try std.testing.expect(cpu.flags_dirty);
+    try std.testing.expectEqual([_]u8{ 0x11, 0x22, 0, 0, 0, 0, 0, 0xff }, cpu.flags);
+}
+
+fn opLoadFlags(self: Instruction, cpu: *Cpu) !?u12 {
+    if (self.regX > 8) return error.FlagOverflow;
+    @memcpy(cpu.V[0 .. self.regX + 1], cpu.flags[0 .. self.regX + 1]);
+    return null;
+}
+
+test "FX85 load flags" {
+    var cpu = try Cpu.init(
+        &[_]u8{ 0xF2, 0x85 },
+        testing_seed,
+        [_]u8{ 0x11, 0x22, 0x33, 0x44, 0, 0, 0, 0 },
+    );
+    try cpu.cycle();
+    try std.testing.expectEqualSlices(u8, &.{ 0x11, 0x22, 0x33 }, cpu.V[0..3]);
 }
