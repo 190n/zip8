@@ -10,6 +10,11 @@ fn cpuPtrCast(in: anytype) switch (@TypeOf(in)) {
     return @ptrCast(@alignCast(in.?));
 }
 
+export const ZIP8_ERR_ILLEGAL_OPCODE: u16 = @intFromError(error.IllegalOpcode);
+export const ZIP8_ERR_STACK_OVERFLOW: u16 = @intFromError(error.StackOverflow);
+export const ZIP8_ERR_BAD_RETURN: u16 = @intFromError(error.BadReturn);
+export const ZIP8_ERR_PROGRAM_TOO_LONG: u16 = @intFromError(error.ProgramTooLong);
+
 export fn zip8GetErrorName(err: u16) callconv(.C) [*:0]const u8 {
     return @errorName(@errorFromInt(err));
 }
@@ -69,6 +74,18 @@ export fn zip8CpuSetDisplayNotDirty(cpu: ?*anyopaque) callconv(.C) void {
 
 export fn zip8CpuGetDisplay(cpu: ?*const anyopaque) callconv(.C) [*]const u8 {
     return @ptrCast(&cpuPtrCast(cpu).display);
+}
+
+export fn zip8CpuGetInstruction(cpu: ?*const anyopaque) callconv(.C) u16 {
+    const mem: []const u8 = &cpuPtrCast(cpu).mem;
+    const pc = cpuPtrCast(cpu).pc;
+    const high = mem[pc];
+    const low = mem[pc + 1];
+    return (@as(u16, high) << 8) + low;
+}
+
+export fn zip8CpuGetProgramCounter(cpu: ?*const anyopaque) callconv(.C) u16 {
+    return cpuPtrCast(cpu).pc;
 }
 
 fn zip8CpuAlloc() callconv(.C) ?[*]u8 {

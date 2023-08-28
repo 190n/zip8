@@ -10,6 +10,26 @@ extern "C" {
 #endif
 
 /**
+ * Error returned when an instruction is invalid
+*/
+extern const uint16_t ZIP8_ERR_ILLEGAL_OPCODE;
+
+/**
+ * Error returned when a call instruction overflows the stack (16 entries)
+*/
+extern const uint16_t ZIP8_ERR_STACK_OVERFLOW;
+
+/**
+ * Error returned when a return instruction is executed but the stack is empty
+*/
+extern const uint16_t ZIP8_ERR_BAD_RETURN;
+
+/**
+ * Error returned when the program supplied to zip8CpuInit does not fit in RAM
+*/
+extern const uint16_t ZIP8_ERR_PROGRAM_TOO_LONG;
+
+/**
  * Converts an error code into a null-terminated string
  *
  * err: an error code obtained via a ZIP-8 function's `err` parameter
@@ -109,6 +129,16 @@ const uint8_t *zip8CpuGetDisplay(const void *cpu);
 static inline uint8_t zip8CpuGetPixel(const void *cpu, uint8_t x, uint8_t y) {
 	return zip8CpuGetDisplay(cpu)[64 * (uint16_t)y + x];
 }
+
+/**
+ * Get the instruction about to be executed by a ZIP-8 CPU
+*/
+uint16_t zip8CpuGetInstruction(const void *cpu);
+
+/**
+ * Get the program counter of a ZIP-8 CPU
+*/
+uint16_t zip8CpuGetProgramCounter(const void *cpu);
 
 #ifdef __cplusplus
 }
