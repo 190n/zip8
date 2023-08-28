@@ -139,6 +139,8 @@ loop
 	:call draw_bird
 	if collide == 1 then jump gameover
 	
+	scratch := score_x
+	scratch2 := score_y
 	:call draw_score
 	
 	# wait 1 frame
@@ -154,8 +156,26 @@ again
 
 : gameover
 clear
+
+# try to move the player to the top or bottom
+scratch := 128
+scratch -= y_hi
+if no_borrow == 0 then y_hi := 0
+scratch := 31
+scratch -= y_hi
+if no_borrow == 0 then y_hi := 30
+
 :call draw_bird
+scratch := score_x
+scratch2 := score_y
 :call draw_score
+
+# check if there is a pipe close enough that the player probably hit it
+i := pipe_data
+load v1
+scratch := 16
+scratch -= pipe_x
+if no_borrow != 0 then :call draw_pipe
 
 # wait some time
 v0 := 30
@@ -185,13 +205,11 @@ jump main
 : draw_pipe
 i := pipe_shaft
 scratch3 := 0
-sprite pipe_x scratch3 8
-scratch3 += 8
-sprite pipe_x scratch3 8
-scratch3 += 8
-sprite pipe_x scratch3 8
-scratch3 += 8
-sprite pipe_x scratch3 8
+sprite pipe_x scratch3 11
+scratch3 += 11
+sprite pipe_x scratch3 11
+scratch3 += 11
+sprite pipe_x scratch3 10
 pipe_center += 6
 sprite pipe_x pipe_center 4
 pipe_center -= 8
@@ -220,8 +238,6 @@ i := scratchmem
 bcd score
 load v2
 
-scratch := score_x
-scratch2 := score_y
 i := hex hundreds
 sprite scratch scratch2 5
 scratch += 5
@@ -289,6 +305,9 @@ return
 0xff
 
 : pipe_shaft
+0x42
+0x42
+0x42
 0x42
 0x42
 0x42
