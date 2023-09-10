@@ -12,12 +12,19 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.12.0-dev.125+7ef1eb1c2
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18.x
+
       - run: sudo apt install binaryen
       - run: zig build wasm -Doptimize=ReleaseSmall
-      - run: rm -rf zig-cache src
+      - run: cd web-host
+      - run: npm install
+      - run: npm run build
+
       - uses: actions/upload-pages-artifact@v2
         with:
-          path: '.'
+          path: 'web-host/dist'
 
   deploy:
     needs: build
