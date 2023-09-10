@@ -7,6 +7,7 @@ const output = document.getElementById('output')!;
 const imageData = ctx.createImageData(64, 32);
 
 const keys = Array(16).fill(false);
+let spaceHeld = false;
 
 const keyBindings = {
 	'1': 0x1,
@@ -30,12 +31,18 @@ const keyBindings = {
 window.onkeydown = (e) => {
 	if (e.key in keyBindings) {
 		keys[keyBindings[e.key as keyof typeof keyBindings]] = true;
+	} else if (e.key == ' ') {
+		e.preventDefault();
+		spaceHeld = true;
 	}
 };
 
 window.onkeyup = (e) => {
 	if (e.key in keyBindings) {
 		keys[keyBindings[e.key as keyof typeof keyBindings]] = false;
+	} else if (e.key == ' ') {
+		e.preventDefault();
+		spaceHeld = false;
 	}
 };
 
@@ -79,7 +86,11 @@ async function run(rom: ArrayBuffer) {
 	function tick() {
 		if (halt) return;
 		timeout = setTimeout(tick, 1000 / 60);
-		cpu.setKeys(keys);
+		if (spaceHeld) {
+			cpu.setKeys(Array(16).fill(true));
+		} else {
+			cpu.setKeys(keys);
+		}
 
 		if (!cpu.isWaitingForKey()) {
 			for (let i = 0; i < instructionsPerTick && !halt; i++) {
