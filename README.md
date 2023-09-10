@@ -8,9 +8,9 @@ This is a [CHIP-8](https://en.wikipedia.org/wiki/CHIP-8) emulator written in Zig
 
 ## Demo
 
-A WebAssembly demo is [hosted on GitHub Pages](https://190n.github.io/zip8/js-host/), running a Flappy Bird game that I wrote for CHIP-8. This supports display, timer, and input, but no sound yet. If you have another ROM you can clone this repo and try it out; I'll add support soon to upload a custom ROM within the webpage. With the repo cloned you can also switch the ROM to `js-host/zig.ch8`, which displays a pixelated Zig logo created by @mountfx.
+A WebAssembly demo is [hosted on GitHub Pages](https://190n.github.io/zip8/), running a Flappy Bird game that I wrote for CHIP-8. This supports display, timer, and input, but no sound yet. You can try some of the other ROMs too or upload your own
 
-Both demo ROMs were developed using [Octo](https://github.com/JohnEarnest/Octo), an excellent CHIP-8 implementation with a built-in high-level assembler, and you can view the assembly source code in the `.8o` files inside `js-host`.
+Both demo ROMs were developed using [Octo](https://github.com/JohnEarnest/Octo), an excellent CHIP-8 implementation with a built-in high-level assembler, and you can view the assembly source code in the `.8o` files inside `web-host/public`.
 
 I've also gotten this running on the Raspberry Pi RP2040 microcontroller, using an [Adafruit Feather RP2040 DVI](https://www.adafruit.com/product/5710), [Earle F Philhower III's Arduino core](https://github.com/earlephilhower/arduino-pico), and [Adafruit's fork of PicoDVI](https://github.com/adafruit/PicoDVI). This version scales the CHIP-8's display up to 640x320, with black bars surrounding to fill 800x480, at 60Hz with an RP2040 overclocked to 295MHz. [Here is a video of that running!](https://cdn.discordapp.com/attachments/854614083345055745/1143692785032118282/PXL_20230822_234035511.TS.mp4)
 
