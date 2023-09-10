@@ -6,10 +6,10 @@ const output = document.getElementById('output');
 
 const imageData = ctx.createImageData(64, 32);
 
-function drawScreen(display) {
+function drawScreen(cpu) {
 	for (let y = 0; y < 32; y += 1) {
 		for (let x = 0; x < 64; x += 1) {
-			const pixel = display[y * 64 + x] * 255;
+			const pixel = cpu.getPixel(x, y) ? 255 : 0;
 			imageData.data[(y * 64 + x) * 4 + 0] = pixel;
 			imageData.data[(y * 64 + x) * 4 + 1] = pixel;
 			imageData.data[(y * 64 + x) * 4 + 2] = pixel;
@@ -101,8 +101,7 @@ async function run(rom) {
 			
 			cpu.timerTick();
 			if (cpu.displayIsDirty()) {
-				const display = cpu.getDisplay();
-				drawScreen(display);
+				drawScreen(cpu);
 				cpu.setDisplayNotDirty();
 			}
 

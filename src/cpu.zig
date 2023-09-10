@@ -36,7 +36,10 @@ stack: std.BoundedArray(u12, 16),
 rand: std.rand.DefaultPrng,
 
 /// display is 64x32 stored row-major
-display: [display_height * display_width]bool = .{false} ** (display_height * display_width),
+display: std.PackedIntArray(u1, 2048) = blk: {
+    @setEvalBranchQuota(20000);
+    break :blk std.PackedIntArray(u1, 2048).initAllTo(0);
+},
 /// whether the contents of the screen have changed since the last time this flag was set to false
 display_dirty: bool = false,
 
@@ -137,8 +140,8 @@ test "Cpu.init" {
     try std.testing.expectEqual(@as(u12, initial_pc), cpu.pc);
     try std.testing.expectEqual(@as(usize, 0), cpu.stack.len);
 
-    for (cpu.display) |pixel| {
-        try std.testing.expectEqual(false, pixel);
+    for (0..cpu.display.len) |i| {
+        try std.testing.expectEqual(@as(u1, 0), cpu.display.get(i));
     }
 
     try std.testing.expectEqualSlices(bool, &(.{false} ** 16), &cpu.keys);

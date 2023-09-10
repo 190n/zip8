@@ -50,6 +50,9 @@ export default class CPU {
 			flagsNum |= BigInt(this.initialFlags[i]) << BigInt(8 * i);
 		}
 		this.call('zip8CpuInit', this.cpu, programBuf, this.program.byteLength, BigInt(this.seed), flagsNum);
+
+		const displayPtr = this.instance.exports.zip8CpuGetDisplay(this.cpu);
+		this.display = new Uint8Array(this.instance.exports.memory.buffer, displayPtr, 64 * 32 / 8);
 	}
 
 	cycle() {
@@ -60,9 +63,11 @@ export default class CPU {
 		this.instance.exports.zip8CpuTimerTick(this.cpu);
 	}
 
-	getDisplay() {
-		const displayPtr = this.instance.exports.zip8CpuGetDisplay(this.cpu);
-		return new Uint8Array(this.instance.exports.memory.buffer.slice(displayPtr, displayPtr + 2048));
+	getPixel(x, y) {
+		const index = 64 * y + x;
+		const byteIndex = Math.floor(index / 8);
+		const bitIndex = index % 8;
+		return Boolean((this.display[byteIndex] >> bitIndex) & 1);
 	}
 
 	setKeys(keys) {

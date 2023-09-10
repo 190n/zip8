@@ -116,11 +116,8 @@ void zip8CpuSetDisplayNotDirty(void *cpu);
  * cpu: opaque pointer for CPU data
  *
  * Returns a flat array of bytes, one for each pixel. CHIP-8 has a 64x32 display so this array is
- * 2048 bytes long. The order is row-major:
- *   - index 0 is coordinates (0, 0)
- *   - index 63 is coordinates (63, 0)
- *   - index 64 is coordinates (0, 1)
- * and so on.
+ * 256 bytes long (bit-packed). The order is from left to right then top to bottom. Pixels are
+ * packed into each byte starting from the least significant bit.
 */
 const uint8_t *zip8CpuGetDisplay(const void *cpu);
 
@@ -134,7 +131,10 @@ const uint8_t *zip8CpuGetDisplay(const void *cpu);
  * Returns zero or one.
 */
 static inline uint8_t zip8CpuGetPixel(const void *cpu, uint8_t x, uint8_t y) {
-	return zip8CpuGetDisplay(cpu)[64 * (uint16_t)y + x];
+	uint16_t index = 64 * (uint16_t) y + x;
+	uint16_t byte_index = index / 8;
+	uint16_t bit_index = index % 8;
+	return (zip8CpuGetDisplay(cpu)[byte_index] >> bit_index) & 0x01;
 }
 
 /**

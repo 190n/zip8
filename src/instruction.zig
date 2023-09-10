@@ -112,7 +112,7 @@ fn opIllegalArithmetic(vx: u8, vy: u8, vf: *const u8) !u8 {
 fn op00EX(self: Instruction, cpu: *Cpu) !?u12 {
     switch (self.opcode) {
         0x00E0 => {
-            @memset(&cpu.display, false);
+            cpu.display.setAll(0);
             cpu.display_dirty = true;
             return null;
         },
@@ -132,10 +132,10 @@ test "00E0 clear screen" {
         0x00, 0xE0,
     }, testing_seed, .{0} ** 8);
     // fill screen
-    @memset(&cpu.display, true);
+    cpu.display.setAll(1);
     try cpu.cycle();
-    for (cpu.display) |pixel| {
-        try std.testing.expectEqual(false, pixel);
+    for (0..cpu.display.len) |i| {
+        try std.testing.expectEqual(@as(u1, 0), cpu.display.get(i));
     }
     try std.testing.expect(cpu.display_dirty);
 }
@@ -648,7 +648,7 @@ fn opDraw(self: Instruction, cpu: *Cpu) !?u12 {
     for (sprite, 0..) |row, y_sprite| {
         for (0..8) |x_sprite| {
             const mask = @as(u8, 0b10000000) >> @as(u3, @intCast(x_sprite));
-            const pixel = (row & mask != 0);
+            const pixel = @intFromBool(row & mask != 0);
             const x = x_start + x_sprite;
             const y = y_start + y_sprite;
             if (x >= Cpu.display_width or y >= Cpu.display_height) {
@@ -656,13 +656,13 @@ fn opDraw(self: Instruction, cpu: *Cpu) !?u12 {
             }
 
             const index = y * Cpu.display_width + x;
-            if (pixel and cpu.display[index]) {
+            if (pixel == 1 and cpu.display.get(index) == 1) {
                 // pixel turned off
                 cpu.V[0xF] = 1;
             }
             // draw using XOR
-            cpu.display[index] = (pixel != cpu.display[index]);
-            cpu.display_dirty = cpu.display_dirty or pixel;
+            cpu.display.set(index, @intFromBool(pixel != cpu.display.get(index)));
+            cpu.display_dirty = cpu.display_dirty or pixel == 1;
         }
     }
     return null;
@@ -694,8 +694,9 @@ test "DXYN draw" {
     // check the screen
     for (sprites, 0..) |pixel, y| {
         for (0..8) |x| {
-            const expected = (pixel & (@as(u8, 1) << @as(u3, @intCast(7 - x)))) != 0;
-            try std.testing.expectEqual(expected, cpu.display[Cpu.display_width * (y + 17) + x + 8]);
+            const expected: u1 = @truncate(pixel >> @intCast(7 - x));
+            const actual_index = Cpu.display_width * (y + 17) + x + 8;
+            try std.testing.expectEqual(expected, cpu.display.get(actual_index));
         }
     }
 
@@ -705,8 +706,8 @@ test "DXYN draw" {
     try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
     try std.testing.expect(cpu.display_dirty);
     // all off
-    for (cpu.display) |pixel| {
-        try std.testing.expectEqual(false, pixel);
+    for (0..cpu.display.len) |i| {
+        try std.testing.expectEqual(@as(u1, 0), cpu.display.get(i));
     }
 }
 
