@@ -20,7 +20,9 @@ jobs:
       - run: zig build wasm -Doptimize=ReleaseSmall
       - run: cd web-host
       - run: npm install
+        working-directory: web-host
       - run: npm run build
+        working-directory: web-host
 
       - uses: actions/upload-pages-artifact@v2
         with:
