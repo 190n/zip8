@@ -34,12 +34,17 @@
 
 :const score_x 49
 :const score_y 1
+:const hiscore_y 26
+:const hiscore_text_y 21
 
-:const scratchmem 0x400
-:const zeroes 0x500
 
-:const pipe_data 0x600
+:calc scratchmem { 413 + 0x200 }
+
+:calc zeroes { 16 + scratchmem }
+
+:calc pipe_data { 16 + zeroes }
 :calc pipe_data_plus { 2 + pipe_data }
+
 
 : main
 x := 8
@@ -64,9 +69,10 @@ loop
 	scratch := jumpkey
 	#if scratch -key then jump do_not_jump
 	i := pipe_data
-	load v1
-	pipe_center -= y_hi
-	if no_borrow != 0 then jump do_not_jump
+  load v1
+  pipe_center -= y_hi
+  if no_borrow != 0 then jump do_not_jump
+
 	dy_lo := 0x60
 	dy_hi := 0xff
 	
@@ -189,6 +195,7 @@ loop
 	if v0 != 0 then
 again
 
+# print game over message
 v0 := 22
 v1 := 5
 i := gameover1
@@ -200,6 +207,23 @@ v0 += 8
 i := gameover3
 sprite v0 v1 11
 
+# load highscore
+loadflags v0
+# check if new score is higher
+scratch := v0
+scratch -= score
+if no_borrow == 0 then v0 := score
+saveflags v0
+score := v0
+scratch := score_x
+scratch2 := hiscore_y
+:call draw_score
+scratch := score_x
+scratch2 := hiscore_text_y
+i := hiscore_text
+sprite scratch scratch2 4
+
+: no_hiscore
 v0 := key
 i := zeroes
 load vf
@@ -321,5 +345,8 @@ return
 0x42
 0x42
 
-: pipe_data
-:calc pipe_data_plus { 2 + pipe_data }
+: hiscore_text
+0x88
+0xe2
+0xa8
+0xaa

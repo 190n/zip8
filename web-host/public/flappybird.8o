@@ -37,11 +37,14 @@
 :const hiscore_y 26
 :const hiscore_text_y 21
 
-:const scratchmem 0x400
-:const zeroes 0x500
 
-:const pipe_data 0x600
+:calc scratchmem { 407 + 0x200 }
+
+:calc zeroes { 16 + scratchmem }
+
+:calc pipe_data { 16 + zeroes }
 :calc pipe_data_plus { 2 + pipe_data }
+
 
 : main
 x := 8
