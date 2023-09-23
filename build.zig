@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) void {
     }
 
     // build a static library for ARM Cortex-M0+, suitable for RP2040
-    const rp2040_library = b.addStaticLibrary(.{
+    const m0plus_library = b.addStaticLibrary(.{
         .name = "zip8",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
@@ -64,11 +64,25 @@ pub fn build(b: *std.Build) void {
         },
         .optimize = optimize,
     });
-    const rp2040_library_install = b.addInstallLibFile(rp2040_library.getEmittedBin(), "libzip8.a");
+    const m0plus_library_install = b.addInstallLibFile(m0plus_library.getEmittedBin(), "cortex-m0plus/libzip8.a");
+
+    // build a static library for AVR
+    const atmega4809_library = b.addStaticLibrary(.{
+        .name = "zip8",
+        .root_source_file = .{ .path = "src/main.zig" },
+        .target = .{
+            .cpu_arch = .avr,
+            .os_tag = .freestanding,
+            .cpu_model = .{ .explicit = &std.Target.avr.cpu.atmega4809 },
+        },
+        .optimize = optimize,
+    });
+    const atmega4809_library_install = b.addInstallLibFile(atmega4809_library.getEmittedBin(), "atmega4809/libzip8.a");
 
     // make a "library" zip file which can be installed in the Arduino IDE
     const write_files_step = b.addWriteFiles();
-    _ = write_files_step.addCopyFile(rp2040_library.getEmittedBin(), "zip8/src/cortex-m0plus/libzip8.a");
+    _ = write_files_step.addCopyFile(m0plus_library.getEmittedBin(), "zip8/src/cortex-m0plus/libzip8.a");
+    _ = write_files_step.addCopyFile(atmega4809_library.getEmittedBin(), "zip8/src/atmega4809/libzip8.a");
     _ = write_files_step.addCopyFile(std.build.LazyPath.relative("src/zip8.h"), "zip8/src/zip8.h");
     _ = write_files_step.addCopyFile(std.build.LazyPath.relative("library.properties"), "zip8/library.properties");
     const zip_step = b.addSystemCommand(&.{ "sh", "-c", "cd $0; zip -r $1 zip8" });
@@ -76,12 +90,19 @@ pub fn build(b: *std.Build) void {
     const zip_output = zip_step.addOutputFileArg("zip8.zip");
     const zip_install_step = b.addInstallFile(zip_output, "lib/zip8.zip");
 
-    const arduino_step = b.step("arduino", "Build .zip Arduino library for RP2040 and other Cortex-M0+ chips");
+    const arduino_step = b.step("arduino", "Build .zip Arduino library for ATmega4809 and Cortex-M0+ boards");
     arduino_step.dependOn(&zip_install_step.step);
-    arduino_step.dependOn(&rp2040_library_install.step);
+
+    const m0plus_step = b.step("m0plus", "Output a static library for Cortex-M0+");
+    m0plus_step.dependOn(&m0plus_library_install.step);
+
+    const atmega4809_step = b.step("atmega4809", "Output a static library for ATmega4809");
+    atmega4809_step.dependOn(&atmega4809_library_install.step);
 
     b.default_step.dependOn(wasm_step);
     b.default_step.dependOn(arduino_step);
+    b.default_step.dependOn(m0plus_step);
+    b.default_step.dependOn(atmega4809_step);
 
     // Creates a step for unit testing.
     const exe_tests = b.addTest(.{
