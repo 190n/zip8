@@ -100,10 +100,9 @@ fn opIllegal(self: Instruction, cpu: *const Cpu) !?u12 {
 }
 
 /// same as opIllegal, but conforms to function signature of arithmetic instructions
-fn opIllegalArithmetic(vx: u8, vy: u8, vf: *const u8) !u8 {
+fn opIllegalArithmetic(vx: u8, vy: u8) !ArithmeticOpcodeResult {
     _ = vx;
     _ = vy;
-    _ = vf;
     return error.IllegalOpcode;
 }
 
@@ -329,10 +328,13 @@ test "7XNN add NN to VX" {
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
 }
 
+const ArithmeticOpcodeResult = struct { u8, ?u8 };
+/// u8 = new vx
+/// ?u8 = new vf, or null for unchanged
+const ArithmeticOpcodeFn = *const fn (vx: u8, vy: u8) ExecutionError!ArithmeticOpcodeResult;
+
 /// dispatch an arithmetic instruction beginning with 8
 fn opArithmetic(self: Instruction, cpu: *Cpu) !?u12 {
-    // vx is set to the return value of this function
-    const ArithmeticOpcodeFn = *const fn (vx: u8, vy: u8, vf: *u8) ExecutionError!u8;
     const arithmetic_opcodes = [_]ArithmeticOpcodeFn{
         opSetRegReg, // 8XY0
         opOr, // 8XY1
@@ -353,9 +355,11 @@ fn opArithmetic(self: Instruction, cpu: *Cpu) !?u12 {
     };
 
     const which_fn = arithmetic_opcodes[self.low4];
-    const vx = &cpu.V[self.regX];
-    const vy = &cpu.V[self.regY];
-    vx.* = try which_fn(vx.*, vy.*, &cpu.V[0xF]);
+    const result = try which_fn(cpu.V[self.regX], cpu.V[self.regY]);
+    cpu.V[self.regX] = result[0];
+    if (result[1]) |vf| {
+        cpu.V[0xF] = vf;
+    }
     return null;
 }
 
@@ -369,10 +373,9 @@ test "illegal arithmetic opcodes" {
 }
 
 /// 8XY0: set VX to VY
-fn opSetRegReg(vx: u8, vy: u8, vf: *const u8) !u8 {
+fn opSetRegReg(vx: u8, vy: u8) !ArithmeticOpcodeResult {
     _ = vx;
-    _ = vf;
-    return vy;
+    return .{ vy, null };
 }
 
 test "8XY0 set VX to VY" {
@@ -390,9 +393,8 @@ test "8XY0 set VX to VY" {
 }
 
 /// 8XY1: set VX to VX | VY
-fn opOr(vx: u8, vy: u8, vf: *const u8) !u8 {
-    _ = vf;
-    return vx | vy;
+fn opOr(vx: u8, vy: u8) !ArithmeticOpcodeResult {
+    return .{ vx | vy, null };
 }
 
 test "8XY1 bitwise OR" {
@@ -407,9 +409,8 @@ test "8XY1 bitwise OR" {
 }
 
 /// 8XY2: set VX to VX & VY
-fn opAnd(vx: u8, vy: u8, vf: *const u8) !u8 {
-    _ = vf;
-    return vx & vy;
+fn opAnd(vx: u8, vy: u8) !ArithmeticOpcodeResult {
+    return .{ vx & vy, null };
 }
 
 test "8XY2 bitwise AND" {
@@ -424,9 +425,8 @@ test "8XY2 bitwise AND" {
 }
 
 /// 8XY3: set VX to VX ^ VY
-fn opXor(vx: u8, vy: u8, vf: *const u8) !u8 {
-    _ = vf;
-    return vx ^ vy;
+fn opXor(vx: u8, vy: u8) !ArithmeticOpcodeResult {
+    return .{ vx ^ vy, null };
 }
 
 test "8XY3 bitwise XOR" {
@@ -441,10 +441,9 @@ test "8XY3 bitwise XOR" {
 }
 
 /// 8XY4: set VX to VX + VY; set VF to 1 if carry occurred, 0 otherwise
-fn opAdd(vx: u8, vy: u8, vf: *u8) !u8 {
+fn opAdd(vx: u8, vy: u8) !ArithmeticOpcodeResult {
     const result = @addWithOverflow(vx, vy);
-    vf.* = result[1];
-    return result[0];
+    return .{ result[0], result[1] };
 }
 
 test "8XY4 add registers" {
@@ -464,10 +463,9 @@ test "8XY4 add registers" {
 }
 
 /// 8XY5: set VX to VX - VY; set VF to 0 if borrow occurred, 1 otherwise
-fn opSub(vx: u8, vy: u8, vf: *u8) !u8 {
+fn opSub(vx: u8, vy: u8) !ArithmeticOpcodeResult {
     const result = @subWithOverflow(vx, vy);
-    vf.* = 1 - result[1];
-    return result[0];
+    return .{ result[0], 1 - result[1] };
 }
 
 test "8XY5 subtract registers" {
@@ -488,10 +486,9 @@ test "8XY5 subtract registers" {
 }
 
 /// 8XY6: set VX to VY >> 1, set VF to the former least significant bit of VY
-fn opShiftRight(vx: u8, vy: u8, vf: *u8) !u8 {
+fn opShiftRight(vx: u8, vy: u8) !ArithmeticOpcodeResult {
     _ = vx;
-    vf.* = vy & 0x01;
-    return vy >> 1;
+    return .{ vy >> 1, vy & 0x01 };
 }
 
 test "8XY6 shift right" {
@@ -510,10 +507,9 @@ test "8XY6 shift right" {
 }
 
 /// 8XY7: set VX to VY - VX; set VF to 0 if borrow occurred, 1 otherwise
-fn opSubRev(vx: u8, vy: u8, vf: *u8) !u8 {
+fn opSubRev(vx: u8, vy: u8) !ArithmeticOpcodeResult {
     const result = @subWithOverflow(vy, vx);
-    vf.* = 1 - result[1];
-    return result[0];
+    return .{ result[0], 1 - result[1] };
 }
 
 test "8XY7 subtract registers in reverse" {
@@ -524,6 +520,10 @@ test "8XY7 subtract registers in reverse" {
         0x60, 59,
         0x61, 13,
         0x80, 0x17,
+        // if destination register is VF, VF should still hold the carry flag, not the result
+        0x6f, 0x40,
+        0x60, 0x80,
+        0x8f, 0x07,
     }, testing_seed, .{0} ** 8);
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, 107 - 25), cpu.V[0x0]);
@@ -531,13 +531,14 @@ test "8XY7 subtract registers in reverse" {
     try cpu.cycleN(3, null);
     try std.testing.expectEqual(@as(u8, @bitCast(@as(i8, @truncate(13 - 59)))), cpu.V[0x0]);
     try std.testing.expectEqual(@as(u8, 0), cpu.V[0xF]);
+    try cpu.cycleN(3, null);
+    try std.testing.expectEqual(@as(u8, 1), cpu.V[0xF]);
 }
 
 /// 8XYE: set VX to VY << 1, set VF to the former most significant bit of VY
-fn opShiftLeft(vx: u8, vy: u8, vf: *u8) !u8 {
+fn opShiftLeft(vx: u8, vy: u8) !ArithmeticOpcodeResult {
     _ = vx;
-    vf.* = vy >> 7;
-    return vy << 1;
+    return .{ vy << 1, vy >> 7 };
 }
 
 test "8XYE shift left" {
