@@ -96,7 +96,7 @@ export fn zip8CpuGetProgramCounter(cpu: ?*const anyopaque) callconv(.C) u16 {
 }
 
 export fn zip8CpuGetFlags(cpu: ?*const anyopaque) callconv(.C) u64 {
-    return std.mem.nativeToLittle(u64, @bitCast(cpuPtrCast(cpu).flags));
+    return std.mem.nativeToLittle(u64, @as(u64, @bitCast(cpuPtrCast(cpu).flags)));
 }
 
 export fn zip8CpuFlagsAreDirty(cpu: ?*const anyopaque) callconv(.C) bool {
