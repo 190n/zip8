@@ -79,7 +79,7 @@ async function run(rom: ArrayBuffer) {
 		initialFlags
 	);
 
-	const instructionsPerTick = 200;
+	const instructionsPerTick = 300;
 
 	let halt = false;
 

@@ -1,0 +1,73 @@
+:alias idx v1
+:alias x v2
+:alias y v3
+:alias k v0
+
+: main
+x := 16
+y := 0
+idx := 0
+
+loop
+	i := order
+	i += idx
+	load k
+
+	i := filled
+	if k key then sprite x y 8
+
+	i := hex k
+	x += 2
+	y += 1
+	sprite x y 5
+
+	x += 6
+	y -= 1
+	idx += 1
+
+	if x == 48 begin
+		x := 16
+		y += 8
+	end
+	
+	if idx != 16 then
+again
+
+vf := 1
+delay := vf
+loop
+	vf := delay
+	if vf != 0 then
+again
+
+clear
+
+jump main
+
+: filled
+0xff
+0xff
+0xff
+0xff
+0xff
+0xff
+0xff
+0xff
+
+: order
+0x01
+0x02
+0x03
+0x0c
+0x04
+0x05
+0x06
+0x0d
+0x07
+0x08
+0x09
+0x0e
+0x0a
+0x00
+0x0b
+0x0f
