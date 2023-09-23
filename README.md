@@ -54,3 +54,8 @@ to send log output to a suitable place. `text` points to a null-terminated strin
 	- `zip8.h`: C API function declarations.
 - `build.zig`: tells Zig how to compile everything and put together the Arduino library
 - `library.properties`: configuration file telling the Arduino IDE how to use this library (this file gets bundled in the ZIP file)
+- `web-host` contains a web application embedding the library:
+	- `index.html` is the main page
+	- `src/cpu.ts` is a JavaScript class wrapping a WebAssembly module running the ZIP-8 code
+	- `src/main.ts` creates a CPU with a given ROM and handles input and drawing
+	- `public` contains various ROMs (`.ch8` files) and in some cases their assembly source code (`.8o` files)
