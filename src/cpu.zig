@@ -5,7 +5,14 @@ const std = @import("std");
 const Instruction = @import("./instruction.zig");
 const font_data = @import("./font.zig").font_data;
 
-pub const memory_size = 4096;
+pub const memory_size = @import("build_options").memory_size orelse 4096;
+
+comptime {
+    if (memory_size > 4096) {
+        @compileError("CHIP-8 memory may not be larger than 4096 bytes");
+    }
+}
+
 pub const initial_pc = 0x200;
 pub const stack_size = 16;
 pub const display_width = 64;

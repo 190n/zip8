@@ -14,6 +14,22 @@ pub fn build(b: *std.Build) void {
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
+
+    const use_avr_gcc = b.option(
+        bool,
+        "use_avr_gcc",
+        "Use C backend and AVR GCC to compile the AVR library instead of LLVM AVR backend",
+    ) orelse false;
+
+    const memory_size = b.option(
+        u13,
+        "memory_size",
+        "Size of the CHIP-8's memory. Higher than 4096 is unacceptable; lower than 4096 may break some programs.",
+    );
+    const options = b.addOptions();
+    options.addOption(?u13, "memory_size", memory_size);
+    const options_module = options.createModule();
+
     const wasm_library = b.addSharedLibrary(.{
         .name = "zip8",
         // In this case the main source file is merely a path, however, in more
@@ -27,6 +43,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     wasm_library.rdynamic = true;
+    wasm_library.addModule("build_options", options_module);
 
     const wasm_step = b.step("wasm", "Build WebAssembly library");
 
@@ -64,13 +81,8 @@ pub fn build(b: *std.Build) void {
         },
         .optimize = optimize,
     });
+    m0plus_library.addModule("build_options", options_module);
     const m0plus_library_install = b.addInstallLibFile(m0plus_library.getEmittedBin(), "cortex-m0plus/libzip8.a");
-
-    const use_avr_gcc = b.option(
-        bool,
-        "use_avr_gcc",
-        "Use C backend and AVR GCC to compile the AVR library instead of LLVM AVR backend",
-    ) orelse false;
 
     // build a static library for AVR
     const atmega4809_library = b.addStaticLibrary(.{
@@ -84,6 +96,7 @@ pub fn build(b: *std.Build) void {
         },
         .optimize = optimize,
     });
+    atmega4809_library.addModule("build_options", options_module);
 
     const atmega4809_library_file = if (use_avr_gcc) bin: {
         // we use this to get the lib_dir from our zig installation as that directory contains zig.h
@@ -146,6 +159,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    exe_tests.addModule("build_options", options_module);
 
     // Similar to creating the run step earlier, this exposes a `test` step to
     // the `zig build --help` menu, providing a way for the user to request
