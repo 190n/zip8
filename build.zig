@@ -66,6 +66,12 @@ pub fn build(b: *std.Build) void {
     });
     const m0plus_library_install = b.addInstallLibFile(m0plus_library.getEmittedBin(), "cortex-m0plus/libzip8.a");
 
+    const use_avr_gcc = b.option(
+        bool,
+        "use_avr_gcc",
+        "Use C backend and AVR GCC to compile the AVR library instead of LLVM AVR backend",
+    ) orelse false;
+
     // build a static library for AVR
     const atmega4809_library = b.addStaticLibrary(.{
         .name = "zip8",
@@ -74,15 +80,45 @@ pub fn build(b: *std.Build) void {
             .cpu_arch = .avr,
             .os_tag = .freestanding,
             .cpu_model = .{ .explicit = &std.Target.avr.cpu.atmega4809 },
+            .ofmt = if (use_avr_gcc) .c else null,
         },
         .optimize = optimize,
     });
-    const atmega4809_library_install = b.addInstallLibFile(atmega4809_library.getEmittedBin(), "atmega4809/libzip8.a");
+
+    const atmega4809_library_file = if (use_avr_gcc) bin: {
+        // we use this to get the lib_dir from our zig installation as that directory contains zig.h
+        const zig_lib_dir_cmd = b.addSystemCommand(&.{ "sh", "-c", "$0 env | jq -r .lib_dir", b.zig_exe });
+        const zig_lib_dir_file = zig_lib_dir_cmd.captureStdOut();
+
+        const gcc_cmd = b.addSystemCommand(&.{
+            "sh",
+            "-c",
+            "avr-gcc -c -Wno-incompatible-pointer-types -Wno-builtin-declaration-mismatch -mmcu=atmega4809 $0 -I $(cat $1) $2 -o $3",
+            switch (optimize) {
+                .Debug => "-g",
+                .ReleaseSafe => "-O3",
+                .ReleaseFast => "-O3",
+                .ReleaseSmall => "-Oz",
+            },
+        });
+        gcc_cmd.addFileArg(zig_lib_dir_file);
+        gcc_cmd.addFileArg(atmega4809_library.getEmittedBin());
+        const avr_object_path = gcc_cmd.addOutputFileArg("zip8.o");
+
+        const ar_cmd = b.addSystemCommand(&.{ "ar", "-rcs" });
+        const avr_library_path = ar_cmd.addOutputFileArg("libzip8.a");
+        ar_cmd.addFileArg(avr_object_path);
+
+        break :bin avr_library_path;
+    } else bin: {
+        break :bin atmega4809_library.getEmittedBin();
+    };
+    const atmega4809_library_install = b.addInstallLibFile(atmega4809_library_file, "atmega4809/libzip8.a");
 
     // make a "library" zip file which can be installed in the Arduino IDE
     const write_files_step = b.addWriteFiles();
     _ = write_files_step.addCopyFile(m0plus_library.getEmittedBin(), "zip8/src/cortex-m0plus/libzip8.a");
-    _ = write_files_step.addCopyFile(atmega4809_library.getEmittedBin(), "zip8/src/atmega4809/libzip8.a");
+    _ = write_files_step.addCopyFile(atmega4809_library_file, "zip8/src/atmega4809/libzip8.a");
     _ = write_files_step.addCopyFile(std.build.LazyPath.relative("src/zip8.h"), "zip8/src/zip8.h");
     _ = write_files_step.addCopyFile(std.build.LazyPath.relative("library.properties"), "zip8/library.properties");
     const zip_step = b.addSystemCommand(&.{ "sh", "-c", "cd $0; zip -r $1 zip8" });
