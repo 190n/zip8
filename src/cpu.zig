@@ -8,6 +8,7 @@ const font_data = @import("./font.zig").font_data;
 const build_options = @import("build_options");
 
 pub const memory_size = build_options.memory_size orelse 4096;
+pub const column_major_display = build_options.column_major_display;
 
 comptime {
     if (memory_size > 4096) {
@@ -140,7 +141,10 @@ pub fn setKeys(self: *Cpu, new_keys: *const [16]bool) void {
 }
 
 pub fn invertPixel(self: *Cpu, x: u8, y: u8) void {
-    const pixel_index = display_width * @as(u16, y) + @as(u16, x);
+    const pixel_index = if (column_major_display)
+        display_height * @as(u16, x) + @as(u16, y)
+    else
+        display_width * @as(u16, y) + @as(u16, x);
     const byte_index = pixel_index / 8;
     const bit_index: u3 = @truncate(pixel_index);
 
@@ -148,7 +152,10 @@ pub fn invertPixel(self: *Cpu, x: u8, y: u8) void {
 }
 
 pub fn getPixel(self: *const Cpu, x: u8, y: u8) u1 {
-    const pixel_index = display_width * @as(u16, y) + @as(u16, x);
+    const pixel_index = if (column_major_display)
+        display_height * @as(u16, x) + @as(u16, y)
+    else
+        display_width * @as(u16, y) + @as(u16, x);
     const byte_index = pixel_index / 8;
     const bit_index: u3 = @truncate(pixel_index);
 

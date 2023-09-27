@@ -26,8 +26,16 @@ pub fn build(b: *std.Build) void {
         "memory_size",
         "Size of the CHIP-8's memory. Higher than 4096 is unacceptable; lower than 4096 may break some programs.",
     );
+
+    const column_major_display = b.option(
+        bool,
+        "column_major_display",
+        "Whether the display should use column-major layout instead of row-major. Default false.",
+    ) orelse false;
+
     const options = b.addOptions();
     options.addOption(?u13, "memory_size", memory_size);
+    options.addOption(bool, "column_major_display", column_major_display);
     const options_module = options.createModule();
 
     const wasm_library = b.addSharedLibrary(.{
@@ -77,6 +85,7 @@ pub fn build(b: *std.Build) void {
         .target = .{
             .cpu_arch = .thumb,
             .os_tag = .freestanding,
+            .abi = .eabi,
             .cpu_model = .{ .explicit = &std.Target.arm.cpu.cortex_m0plus },
         },
         .optimize = optimize,
