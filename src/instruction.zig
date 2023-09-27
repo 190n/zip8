@@ -111,7 +111,7 @@ fn opIllegalArithmetic(vx: u8, vy: u8) !ArithmeticOpcodeResult {
 fn op00EX(self: Instruction, cpu: *Cpu) !?u12 {
     switch (self.opcode) {
         0x00E0 => {
-            cpu.display.setAll(0);
+            @memset(&cpu.display, 0);
             cpu.display_dirty = true;
             return null;
         },
@@ -131,10 +131,10 @@ test "00E0 clear screen" {
         0x00, 0xE0,
     }, testing_seed, .{0} ** 8);
     // fill screen
-    cpu.display.setAll(1);
+    @memset(&cpu.display, 0xff);
     try cpu.cycle();
-    for (0..cpu.display.len) |i| {
-        try std.testing.expectEqual(@as(u1, 0), cpu.display.get(i));
+    for (cpu.display) |byte| {
+        try std.testing.expectEqual(@as(u8, 0), byte);
     }
     try std.testing.expect(cpu.display_dirty);
 }
@@ -639,6 +639,13 @@ test "CXNN random" {
     try std.testing.expectEqual(@as(u8, 0x00), cpu.V[0x0]);
 }
 
+export fn draw(ptr: ?*anyopaque, xReg: u8, yReg: u8, rows: u8) callconv(.C) void {
+    const cpu: *Cpu = @alignCast(@ptrCast(ptr.?));
+    const inst = Instruction.decode(0xd000 | (@as(u16, xReg) << 8) | (yReg << 4) | rows);
+    _ = inst.exec(cpu) catch unreachable;
+    cpu.pc +%= 2;
+}
+
 /// DXYN: draw an 8xN sprite from memory starting at I at (VX, VY); set VF to 1 if any pixel was
 /// turned off, 0 otherwise
 fn opDraw(self: Instruction, cpu: *Cpu) !?u12 {
@@ -648,22 +655,19 @@ fn opDraw(self: Instruction, cpu: *Cpu) !?u12 {
     const y_start = cpu.V[self.regY] % Cpu.display_height;
     for (sprite, 0..) |row, y_sprite| {
         for (0..8) |x_sprite| {
-            const mask = @as(u8, 0b10000000) >> @as(u3, @intCast(x_sprite));
-            const pixel = @intFromBool(row & mask != 0);
-            const x = x_start + x_sprite;
-            const y = y_start + y_sprite;
+            const pixel: u1 = @truncate(row >> @intCast(7 - x_sprite));
+
+            const x: u8 = @intCast(x_start + x_sprite);
+            const y: u8 = @intCast(y_start + y_sprite);
             if (x >= Cpu.display_width or y >= Cpu.display_height) {
                 continue;
             }
 
-            const index = y * Cpu.display_width + x;
-            if (pixel == 1 and cpu.display.get(index) == 1) {
-                // pixel turned off
-                cpu.V[0xF] = 1;
+            if (pixel == 1) {
+                if (cpu.getPixel(x, y) == 1) cpu.V[0xF] = 1;
+                cpu.invertPixel(x, y);
+                cpu.display_dirty = true;
             }
-            // draw using XOR
-            cpu.display.set(index, @intFromBool(pixel != cpu.display.get(index)));
-            cpu.display_dirty = cpu.display_dirty or pixel == 1;
         }
     }
     return null;
@@ -696,8 +700,7 @@ test "DXYN draw" {
     for (sprites, 0..) |pixel, y| {
         for (0..8) |x| {
             const expected: u1 = @truncate(pixel >> @intCast(7 - x));
-            const actual_index = Cpu.display_width * (y + 17) + x + 8;
-            try std.testing.expectEqual(expected, cpu.display.get(actual_index));
+            try std.testing.expectEqual(expected, cpu.getPixel(@intCast(x + 8), @intCast(y + 17)));
         }
     }
 
@@ -708,7 +711,7 @@ test "DXYN draw" {
     try std.testing.expect(cpu.display_dirty);
     // all off
     for (0..cpu.display.len) |i| {
-        try std.testing.expectEqual(@as(u1, 0), cpu.display.get(i));
+        try std.testing.expectEqual(@as(u8, 0), cpu.display[i]);
     }
 }
 
@@ -965,7 +968,7 @@ test "FX55 store registers" {
 /// FX65: load values from memory starting at I into registers [V0, VX]; set I to I + X + 1
 fn opLoad(self: Instruction, cpu: *Cpu) !?u12 {
     for (0..(@as(u8, self.regX) + 1)) |offset| {
-        cpu.V[offset] = cpu.mem[cpu.I];
+        cpu.V[offset] = @as([*]const u8, @ptrCast(&cpu.mem))[cpu.I];
         cpu.I +%= 1;
     }
     return null;

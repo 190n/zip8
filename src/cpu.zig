@@ -5,7 +5,9 @@ const std = @import("std");
 const Instruction = @import("./instruction.zig");
 const font_data = @import("./font.zig").font_data;
 
-pub const memory_size = @import("build_options").memory_size orelse 4096;
+const build_options = @import("build_options");
+
+pub const memory_size = build_options.memory_size orelse 4096;
 
 comptime {
     if (memory_size > 4096) {
@@ -43,10 +45,7 @@ stack: std.BoundedArray(u12, 16),
 rand: std.rand.DefaultPrng,
 
 /// display is 64x32 stored row-major
-display: std.PackedIntArray(u1, 2048) = blk: {
-    @setEvalBranchQuota(20000);
-    break :blk std.PackedIntArray(u1, 2048).initAllTo(0);
-},
+display: [display_width * display_height / 8]u8 = .{0} ** (display_width * display_height / 8),
 /// whether the contents of the screen have changed since the last time this flag was set to false
 display_dirty: bool = false,
 
@@ -89,7 +88,9 @@ pub fn init(program: []const u8, seed: u64, flags: [8]u8) error{ProgramTooLong}!
 }
 
 pub fn cycle(self: *Cpu) !void {
-    const opcode: u16 = (@as(u16, self.mem[self.pc]) << 8) | self.mem[self.pc + 1];
+    const hi: u8 = @as([*]u8, @ptrCast(&self.mem))[self.pc];
+    const lo: u8 = @as([*]u8, @ptrCast(&self.mem))[self.pc + 1];
+    const opcode: u16 = (@as(u16, hi) << 8) + lo;
     const inst = Instruction.decode(opcode);
     log.debug("{any}", .{inst});
     if (inst.exec(self) catch |e| {
@@ -138,6 +139,22 @@ pub fn setKeys(self: *Cpu, new_keys: *const [16]bool) void {
     @memcpy(&self.keys, new_keys);
 }
 
+pub fn invertPixel(self: *Cpu, x: u8, y: u8) void {
+    const pixel_index = display_width * @as(u16, y) + @as(u16, x);
+    const byte_index = pixel_index / 8;
+    const bit_index: u3 = @truncate(pixel_index);
+
+    self.display[byte_index] ^= (@as(u8, 1) << bit_index);
+}
+
+pub fn getPixel(self: *const Cpu, x: u8, y: u8) u1 {
+    const pixel_index = display_width * @as(u16, y) + @as(u16, x);
+    const byte_index = pixel_index / 8;
+    const bit_index: u3 = @truncate(pixel_index);
+
+    return @truncate(@as([*]const u8, @ptrCast(&self.display))[byte_index] >> bit_index);
+}
+
 test "Cpu.init" {
     const cpu = try Cpu.init("abc", 0, .{0} ** 8);
     try std.testing.expectEqualSlices(u8, &(.{0} ** 16), &cpu.V);
@@ -148,7 +165,7 @@ test "Cpu.init" {
     try std.testing.expectEqual(@as(usize, 0), cpu.stack.len);
 
     for (0..cpu.display.len) |i| {
-        try std.testing.expectEqual(@as(u1, 0), cpu.display.get(i));
+        try std.testing.expectEqual(@as(u8, 0), cpu.display[i]);
     }
 
     try std.testing.expectEqualSlices(bool, &(.{false} ** 16), &cpu.keys);

@@ -80,7 +80,7 @@ export fn zip8CpuSetDisplayNotDirty(cpu: ?*anyopaque) callconv(.C) void {
 }
 
 export fn zip8CpuGetDisplay(cpu: ?*const anyopaque) callconv(.C) [*]const u8 {
-    return &cpuPtrCast(cpu).display.bytes;
+    return &cpuPtrCast(cpu).display;
 }
 
 export fn zip8CpuGetInstruction(cpu: ?*const anyopaque) callconv(.C) u16 {
