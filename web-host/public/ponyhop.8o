@@ -33,20 +33,18 @@ again
 delay_amount := 10
 
 loop
-	:call setup
 	:call smol
 	delay := delay_amount
 	loop
 		vf := delay
 		if vf != 0 then
 	again
-	:call setup
 	:call smol
 	
 	frame += 1
 again
 
-: setup
+: smol
 x := 2
 y := 16
 i := right00
@@ -60,9 +58,8 @@ bottom_offset := 3
 ve := 1
 ve &= frame
 if ve != 0 then y -= 5
-return
 
-: smol
+
 sprite x y 15
 i += incr
 x += 8
@@ -72,9 +69,6 @@ x -= bottom_offset
 y += 15
 sprite x y 1
 return
-
-: halt
-jump halt
 
 : left00
 0x0d
