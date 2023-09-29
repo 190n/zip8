@@ -15,19 +15,19 @@ loop
 	loop
 		: change_height_fake
 		:calc change_height { 1 + change_height_fake }
-		sprite x y 15
+		sprite x y 12
 		x += 8
 		i += incr
 		if x != 66 then
 	again
 	i := change_height
-	v0 := 0x1c
+	v0 := 0x1f
 	save v0
 	i := big00
 	x := 34
-	y -= 12
+	y -= 15
 	incr := 15
-	if y != 252 then	
+	if y != 246 then	
 again
 
 delay_amount := 10
@@ -57,7 +57,7 @@ bottom_offset := 3
 : not_left
 ve := 1
 ve &= frame
-if ve != 0 then y -= 5
+if ve != 0 then y -= 3
 
 
 sprite x y 15
