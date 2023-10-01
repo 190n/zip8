@@ -2,6 +2,10 @@
 
 This is a [CHIP-8](https://en.wikipedia.org/wiki/CHIP-8) emulator written in Zig. It's designed to be portable through a minimal interface so that you can embed it on a variety of different platforms. Currently, there's a web wrapper which uses the code compiled to WebAssembly, and it also gets compiled to an Arduino library suitable for the RP2040 (or other Cortex-M0+ microcontrollers).
 
+## Credits
+
+The pony artwork in `pony.ch8` and `ponyhop.ch8` was done by Fayabella.
+
 ## Limitations
 
 - Sound is not exposed via the C API.
