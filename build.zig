@@ -38,6 +38,15 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "column_major_display", column_major_display);
     const options_module = options.createModule();
 
+    const native_library = b.addSharedLibrary(.{
+        .name = "zip8",
+        .root_source_file = .{ .path = "src/main.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    native_library.addModule("build_options", options_module);
+    const native_library_install = b.addInstallLibFile(native_library.getEmittedBin(), "libzip8.a");
+
     const wasm_library = b.addSharedLibrary(.{
         .name = "zip8",
         // In this case the main source file is merely a path, however, in more
@@ -157,10 +166,7 @@ pub fn build(b: *std.Build) void {
     const atmega4809_step = b.step("atmega4809", "Output a static library for ATmega4809");
     atmega4809_step.dependOn(&atmega4809_library_install.step);
 
-    b.default_step.dependOn(wasm_step);
-    b.default_step.dependOn(arduino_step);
-    b.default_step.dependOn(m0plus_step);
-    b.default_step.dependOn(atmega4809_step);
+    b.default_step.dependOn(&native_library_install.step);
 
     // Creates a step for unit testing.
     const exe_tests = b.addTest(.{
