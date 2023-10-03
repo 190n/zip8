@@ -22,13 +22,17 @@ Both demo ROMs were developed using [Octo](https://github.com/JohnEarnest/Octo),
 
 I've also gotten this running on the Raspberry Pi RP2040 microcontroller, using an [Adafruit Feather RP2040 DVI](https://www.adafruit.com/product/5710), [Earle F Philhower III's Arduino core](https://github.com/earlephilhower/arduino-pico), and [Adafruit's fork of PicoDVI](https://github.com/adafruit/PicoDVI). This version scales the CHIP-8's display up to 640x320, with black bars surrounding to fill 800x480, at 60Hz with an RP2040 overclocked to 295MHz. Here is a video of that running:
 
-
+https://github.com/190n/zip8/assets/7763597/c88d0045-36c4-4740-a0fd-c0d093247c14
 
 ### Nano Every
 
 Finally, I've run this code on an Arduino Nano Every. This board uses the ATmega4809 microcontroller, which is a 20MHz 8-bit AVR chip with 6KiB RAM and 48KiB flash. I chose this because I thought the small memory would make running CHIP-8 possible but difficult (CHIP-8 itself has 4,096 bytes of memory, and the display, registers, and other state increases that to 4,472 bytes currently). Unfortunately I have not yet reduced the memory enough to run full CHIP-8 (I changed the memory size to 1,024 bytes), but I have improved performance significantly (the time for one frame went from roughly 230ms to 13ms) since the early iterations so that it now runs the same Flappy Bird demo as on the web version at full speed.
 
 In addition to the Arduino, this version uses an SSD1306 128x64 monochrome OLED display connected over SPI (I²C is too slow). I modified [Adafruit's driver library](https://github.com/adafruit/Adafruit_SSD1306/) to avoid storing a separate 1,024-byte bitmap for the display contents; instead, I upscale the 64x32 representation stored by ZIP-8 on the fly. Below is a video of this setup in operation:
+
+https://github.com/190n/zip8/assets/7763597/53d381a4-8db8-42e2-93e9-9f9d95a1a19f
+
+The board in the foreground will eventually drive a 4x4 macropad connected to both my microcontroller setups over I²C. For now, it provides only a single button. All processing is done on the blue Arduino in the breadboard.
 
 ## Usage
 
