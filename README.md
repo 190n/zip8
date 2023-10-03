@@ -28,7 +28,7 @@ https://github.com/190n/zip8/assets/7763597/c88d0045-36c4-4740-a0fd-c0d093247c14
 
 Finally, I've run this code on an Arduino Nano Every. This board uses the ATmega4809 microcontroller, which is a 20MHz 8-bit AVR chip with 6KiB RAM and 48KiB flash. I chose this because I thought the small memory would make running CHIP-8 possible but difficult (CHIP-8 itself has 4,096 bytes of memory, and the display, registers, and other state increases that to 4,472 bytes currently). Unfortunately I have not yet reduced the memory enough to run full CHIP-8 (I changed the memory size to 1,024 bytes), but I have improved performance significantly (the time for one frame went from roughly 230ms to 13ms) since the early iterations so that it now runs the same Flappy Bird demo as on the web version at full speed.
 
-In addition to the Arduino, this version uses an SSD1306 128x64 monochrome OLED display connected over SPI (I²C is too slow). I modified [Adafruit's driver library](https://github.com/adafruit/Adafruit_SSD1306/) to avoid storing a separate 1,024-byte bitmap for the display contents; instead, I upscale the 64x32 representation stored by ZIP-8 on the fly. Below is a video of this setup in operation:
+In addition to the Arduino, this version uses an SSD1306 128x64 monochrome OLED display connected over SPI (I²C is too slow). I modified [Adafruit's driver library](https://github.com/adafruit/Adafruit_SSD1306/) to avoid storing a separate 1,024-byte bitmap for the display contents; instead, I [upscale the 64x32 representation stored by ZIP-8 on the fly](nano-every-host/zip8ssd1306.cpp#L201-L231). Below is a video of this setup in operation:
 
 https://github.com/190n/zip8/assets/7763597/53d381a4-8db8-42e2-93e9-9f9d95a1a19f
 
@@ -124,3 +124,7 @@ The last command prints a `localhost` URL where you can access the server. The p
 	- `src/cpu.ts` is a JavaScript class wrapping a WebAssembly module running the ZIP-8 code
 	- `src/main.ts` creates a CPU with a given ROM and handles input and drawing
 	- `public` contains various ROMs (`.ch8` files) and in some cases their assembly source code (`.8o` files)
+
+# License
+
+[nano-every-host/zip8ssd1306.cpp](nano-every-host/zip8ssd1306.cpp) is derived from the Adafruit_SSD1306 library and licensed under the 3-clause BSD license in [nano-every-host/license-ssd1306.txt](nano-every-host/license-ssd1306.txt). All other source files are licensed according to [LICENSE](LICENSE) (MIT).
