@@ -24,6 +24,8 @@ I've also gotten this running on the Raspberry Pi RP2040 microcontroller, using 
 
 https://github.com/190n/zip8/assets/7763597/c88d0045-36c4-4740-a0fd-c0d093247c14
 
+The source for this version is in [rp2040-host](rp2040-host).
+
 ### Nano Every
 
 Finally, I've run this code on an Arduino Nano Every. This board uses the ATmega4809 microcontroller, which is a 20MHz 8-bit AVR chip with 6KiB RAM and 48KiB flash. I chose this because I thought the small memory would make running CHIP-8 possible but difficult (CHIP-8 itself has 4,096 bytes of memory, and the display, registers, and other state increases that to 4,472 bytes currently). Unfortunately I have not yet reduced the memory enough to run full CHIP-8 (I changed the memory size to 1,024 bytes), but I have improved performance significantly (the time for one frame went from roughly 230ms to 13ms) since the early iterations so that it now runs the same Flappy Bird demo as on the web version at full speed.
@@ -33,6 +35,8 @@ In addition to the Arduino, this version uses an SSD1306 128x64 monochrome OLED 
 https://github.com/190n/zip8/assets/7763597/53d381a4-8db8-42e2-93e9-9f9d95a1a19f
 
 The board in the foreground will eventually drive a 4x4 macropad connected to both my microcontroller setups over I²C. For now, it provides only a single button. All processing is done on the blue Arduino in the breadboard.
+
+The source for this version is in [nano-every-host](nano-every-host).
 
 ## Usage
 
