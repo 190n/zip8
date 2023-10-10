@@ -142,10 +142,15 @@ export default class CPU {
 	renderDisplay(out: ImageData) {
 		for (let y = 0; y < 32; y += 1) {
 			for (let x = 0; x < 64; x += 1) {
-				const pixel = this.getPixel(x, y) ? 255 : 0;
-				out.data[(y * 64 + x) * 4 + 0] = pixel;
-				out.data[(y * 64 + x) * 4 + 1] = pixel;
-				out.data[(y * 64 + x) * 4 + 2] = pixel;
+				let rgb;
+				if (window.location.hash == '#pony') {
+					rgb = this.getPixel(x, y) ? [0x5f, 0x52, 0x2b] : [0x91, 0x41, 0x2a];
+				} else {
+					rgb = this.getPixel(x, y) ? [0xff, 0xff, 0xff] : [0x00, 0x00, 0x00];
+				}
+				out.data[(y * 64 + x) * 4 + 0] = rgb[0];
+				out.data[(y * 64 + x) * 4 + 1] = rgb[1];
+				out.data[(y * 64 + x) * 4 + 2] = rgb[2];
 				out.data[(y * 64 + x) * 4 + 3] = 255;
 			}
 		}
