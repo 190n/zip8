@@ -134,7 +134,7 @@ pub fn build(b: *std.Build) void {
                 .ReleaseSmall => "-Oz",
             },
         });
-        gcc_cmd.addArg(b.lib_dir);
+        gcc_cmd.addFileArg(b.zig_lib_dir.?);
         gcc_cmd.addFileArg(atmega4809_library.getEmittedBin());
 
         const avr_object_path = gcc_cmd.addOutputFileArg("zip8.o");
