@@ -17,7 +17,7 @@ jobs:
           node-version: 18.x
 
       - run: sudo apt install binaryen
-      - run: zig build wasm -Doptimize=ReleaseSmall
+      - run: zig build wasm --release
       - run: cd web-host
       - run: npm install
         working-directory: web-host
