@@ -92,6 +92,8 @@ async function run(rom: ArrayBuffer) {
 			cpu.setKeys(keys);
 		}
 
+		cpu.resetDrawBytes();
+
 		if (!cpu.isWaitingForKey()) {
 			for (let i = 0; i < instructionsPerTick && !halt; i++) {
 				try {
@@ -116,6 +118,8 @@ async function run(rom: ArrayBuffer) {
 				localStorage.setItem(key, JSON.stringify(flags));
 			}
 		}
+
+		console.log(cpu.getDrawBytes());
 	}
 
 	tick();

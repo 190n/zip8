@@ -107,18 +107,28 @@ export fn zip8CpuSetFlagsNotDirty(cpu: ?*anyopaque) callconv(.C) void {
     cpuPtrCast(cpu).flags_dirty = false;
 }
 
-fn zip8CpuAlloc() callconv(.C) ?[*]u8 {
-    return (std.heap.wasm_allocator.alignedAlloc(u8, @alignOf(Cpu), @sizeOf(Cpu)) catch return null).ptr;
+export fn zip8CpuGetDrawBytes(cpu: ?*const anyopaque) callconv(.C) usize {
+    return cpuPtrCast(cpu).draw_bytes_this_frame;
 }
 
-fn wasmAlloc(n: usize) callconv(.C) ?[*]u8 {
-    return (std.heap.wasm_allocator.alignedAlloc(u8, @import("builtin").target.maxIntAlignment(), n) catch return null).ptr;
+export fn zip8CpuResetDrawBytes(cpu: ?*anyopaque) callconv(.C) void {
+    cpuPtrCast(cpu).draw_bytes_this_frame = 0;
 }
 
 comptime {
     if (@import("builtin").target.isWasm()) {
-        @export(zip8CpuAlloc, .{ .name = "zip8CpuAlloc" });
-        @export(wasmAlloc, .{ .name = "wasmAlloc" });
+        const wasm_only_functions = struct {
+            fn zip8CpuAlloc() callconv(.C) ?[*]u8 {
+                return (std.heap.wasm_allocator.alignedAlloc(u8, @alignOf(Cpu), @sizeOf(Cpu)) catch return null).ptr;
+            }
+
+            fn wasmAlloc(n: usize) callconv(.C) ?[*]u8 {
+                return (std.heap.wasm_allocator.alignedAlloc(u8, @import("builtin").target.maxIntAlignment(), n) catch return null).ptr;
+            }
+        };
+
+        @export(wasm_only_functions.zip8CpuAlloc, .{ .name = "zip8CpuAlloc" });
+        @export(wasm_only_functions.wasmAlloc, .{ .name = "wasmAlloc" });
     }
 }
 

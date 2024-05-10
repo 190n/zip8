@@ -31,6 +31,8 @@ interface Zip8Exports {
 	zip8CpuFlagsAreDirty(cpuPtr: number): boolean;
 	zip8CpuSetFlagsNotDirty(cpuPtr: number): void;
 	zip8CpuAlloc(): number;
+	zip8CpuGetDrawBytes(cpuPtr: number): number;
+	zip8CpuResetDrawBytes(cpuPtr: number): void;
 	wasmAlloc(size: number): number;
 }
 
@@ -201,5 +203,13 @@ export default class CPU {
 			flags[i] = Number(flagsNum >> BigInt(8 * i)) & 0xff;
 		}
 		return flags;
+	}
+
+	getDrawBytes(): number {
+		return this.exports.zip8CpuGetDrawBytes(this.cpuPtr);
+	}
+
+	resetDrawBytes() {
+		this.exports.zip8CpuResetDrawBytes(this.cpuPtr);
 	}
 }

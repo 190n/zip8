@@ -23,6 +23,8 @@ opcode: u16,
 
 const testing_seed = 1337;
 
+const draw_log = std.log.scoped(.draw);
+
 /// split up an opcode into useful parts
 pub fn decode(opcode: u16) Instruction {
     const nibbles = [4]u4{
@@ -113,6 +115,8 @@ fn op00EX(self: Instruction, cpu: *Cpu) !?u12 {
         0x00E0 => {
             @memset(&cpu.display, 0);
             cpu.display_dirty = true;
+            draw_log.info("clear", .{});
+            cpu.draw_bytes_this_frame += 4;
             return null;
         },
         0x00EE => {
@@ -639,20 +643,16 @@ test "CXNN random" {
     try std.testing.expectEqual(@as(u8, 0x00), cpu.V[0x0]);
 }
 
-export fn draw(ptr: ?*anyopaque, xReg: u8, yReg: u8, rows: u8) callconv(.C) void {
-    const cpu: *Cpu = @alignCast(@ptrCast(ptr.?));
-    const inst = Instruction.decode(0xd000 | (@as(u16, xReg) << 8) | (yReg << 4) | rows);
-    _ = inst.exec(cpu) catch unreachable;
-    cpu.pc +%= 2;
-}
-
 /// DXYN: draw an 8xN sprite from memory starting at I at (VX, VY); set VF to 1 if any pixel was
 /// turned off, 0 otherwise
 fn opDraw(self: Instruction, cpu: *Cpu) !?u12 {
     cpu.V[0xF] = 0;
-    const sprite: []const u8 = cpu.mem[(cpu.I)..(cpu.I + self.low4)];
+    const sprite: []const u8 = cpu.mem[cpu.I..][0..self.low4];
     const x_start = cpu.V[self.regX] % Cpu.display_width;
     const y_start = cpu.V[self.regY] % Cpu.display_height;
+
+    var any_bytes_dirty = false;
+
     for (sprite, 0..) |row, y_sprite| {
         for (0..8) |x_sprite| {
             const pixel: u1 = @truncate(row >> @intCast(7 - x_sprite));
@@ -668,8 +668,21 @@ fn opDraw(self: Instruction, cpu: *Cpu) !?u12 {
                 cpu.invertPixel(x, y);
                 cpu.display_dirty = true;
             }
+
+            const mem_index = y_sprite + cpu.I;
+            if ((cpu.mem_dirty[mem_index / 8] >> @truncate(mem_index)) & 0x01 != 0) {
+                any_bytes_dirty = true;
+                cpu.mem_dirty[mem_index / 8] ^= (@as(u8, 1) << @truncate(mem_index));
+            }
         }
     }
+
+    if (any_bytes_dirty) {
+        draw_log.info("untaint: [{}, {})", .{ cpu.I, cpu.I + self.low4 });
+        cpu.draw_bytes_this_frame += self.low4;
+    }
+    draw_log.info("sprite: {} rows at ({}, {})", .{ sprite.len, x_start, y_start });
+    cpu.draw_bytes_this_frame += 4;
     return null;
 }
 
@@ -934,6 +947,7 @@ fn opStore(self: Instruction, cpu: *Cpu) !?u12 {
     for (0..(@as(u8, self.regX) + 1)) |offset| {
         cpu.mem[cpu.I] = cpu.V[offset];
         cpu.I +%= 1;
+        cpu.mem_dirty[cpu.I / 8] |= (@as(u8, 1) << @truncate(cpu.I));
     }
     return null;
 }

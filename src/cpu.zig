@@ -36,14 +36,19 @@ const log = if (@import("builtin").is_test) struct {
 V: [16]u8 = .{0} ** 16,
 /// 12-bit register I for indexing memory
 I: u12 = 0,
-/// 4 KiB of memory
-mem: [memory_size]u8 = [_]u8{0} ** memory_size,
 /// program counter
 pc: u12 = initial_pc,
 /// call stack
 stack: std.BoundedArray(u12, 16),
 /// random number generator to use
 rand: std.rand.DefaultPrng,
+
+/// 4 KiB of memory
+mem: [memory_size]u8 = .{0x00} ** memory_size,
+/// track which memory has not been synchronized to clients
+mem_dirty: [memory_size / 8]u8 = .{0xff} ** (memory_size / 8),
+
+draw_bytes_this_frame: usize = 0,
 
 /// display is 64x32 stored row-major
 display: [display_width * display_height / 8]u8 = .{0} ** (display_width * display_height / 8),
