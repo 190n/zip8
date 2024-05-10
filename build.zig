@@ -123,10 +123,25 @@ pub fn build(b: *std.Build) void {
     atmega4809_library.root_module.addImport("build_options", options_module);
 
     const atmega4809_library_file = if (use_avr_gcc) bin: {
+        // we use this to get the lib_dir from our zig installation as that directory contains zig.h
+        const zig_lib_dir_cmd = b.addSystemCommand(&.{ "sh", "-c", "$0 env | jq -r .lib_dir", b.graph.zig_exe });
+        const zig_lib_dir_file = zig_lib_dir_cmd.captureStdOut();
+
         const gcc_cmd = b.addSystemCommand(&.{
             "sh",
             "-c",
-            "avr-gcc -c -Wno-incompatible-pointer-types -Wno-builtin-declaration-mismatch -mmcu=atmega4809 $0 -I $1 $2 -o $3",
+            // basic CFLAGS
+            \\avr-gcc -c -Wno-incompatible-pointer-types -Wno-builtin-declaration-mismatch -mmcu=atmega4809 \
+            // $0 is set in the following switch() to the correct optimization flag
+            \\$0 \
+            // $1 is set to the file containing the path to zig_lib_dir
+            \\-I $(cat $1) \
+            // $2 is set to the path to the generated C file
+            \\$2 \
+            // $3 is set to the output object file
+            \\-o $3
+            ,
+            // $0
             switch (optimize) {
                 .Debug => "-g",
                 .ReleaseSafe => "-O3",
@@ -134,11 +149,12 @@ pub fn build(b: *std.Build) void {
                 .ReleaseSmall => "-Oz",
             },
         });
-        gcc_cmd.addFileArg(b.zig_lib_dir.?);
+        // $1
+        gcc_cmd.addFileArg(zig_lib_dir_file);
+        // $2
         gcc_cmd.addFileArg(atmega4809_library.getEmittedBin());
-
+        // $3
         const avr_object_path = gcc_cmd.addOutputFileArg("zip8.o");
-
         const ar_cmd = b.addSystemCommand(&.{ "ar", "-rcs" });
         const avr_library_path = ar_cmd.addOutputFileArg("libzip8.a");
         ar_cmd.addFileArg(avr_object_path);
