@@ -118,12 +118,16 @@ export fn zip8CpuResetDrawBytes(cpu: ?*anyopaque) callconv(.C) void {
 comptime {
     if (@import("builtin").target.isWasm()) {
         const wasm_only_functions = struct {
+            var buf: [65536]u8 = undefined;
+            var fba = std.heap.FixedBufferAllocator.init(&buf);
+            const allocator = fba.allocator();
+
             fn zip8CpuAlloc() callconv(.C) ?[*]u8 {
-                return (std.heap.wasm_allocator.alignedAlloc(u8, @alignOf(Cpu), @sizeOf(Cpu)) catch return null).ptr;
+                return (allocator.alignedAlloc(u8, @alignOf(Cpu), @sizeOf(Cpu)) catch return null).ptr;
             }
 
             fn wasmAlloc(n: usize) callconv(.C) ?[*]u8 {
-                return (std.heap.wasm_allocator.alignedAlloc(u8, @import("builtin").target.maxIntAlignment(), n) catch return null).ptr;
+                return (allocator.alignedAlloc(u8, @import("builtin").target.maxIntAlignment(), n) catch return null).ptr;
             }
         };
 
