@@ -92,7 +92,7 @@ async function run(rom: ArrayBuffer) {
 			cpu.setKeys(keys);
 		}
 
-		cpu.resetDrawBytes();
+		// cpu.resetDrawBytes();
 
 		if (!cpu.isWaitingForKey()) {
 			for (let i = 0; i < instructionsPerTick && !halt; i++) {
@@ -119,7 +119,7 @@ async function run(rom: ArrayBuffer) {
 			}
 		}
 
-		console.log(cpu.getDrawBytes());
+		// console.log(cpu.getDrawBytes());
 	}
 
 	tick();

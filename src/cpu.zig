@@ -44,11 +44,18 @@ stack: std.BoundedArray(u12, 16),
 rand: std.rand.DefaultPrng,
 
 /// 4 KiB of memory
-mem: [memory_size]u8 = .{0x00} ** memory_size,
+mem: [memory_size]u8,
 /// track which memory has not been synchronized to clients
-mem_dirty: [memory_size / 8]u8 = .{0xff} ** (memory_size / 8),
+mem_dirty: if (build_options.experimental_render_hooks)
+    [memory_size / 8]u8
+else
+    void =
+    if (build_options.experimental_render_hooks)
+        .{0xff} ** (memory_size / 8)
+    else {},
 
-draw_bytes_this_frame: usize = 0,
+draw_bytes_this_frame: if (build_options.experimental_render_hooks) usize else void =
+    if (build_options.experimental_render_hooks) 0 else {},
 
 /// display is 64x32 stored row-major
 display: [display_width * display_height / 8]u8 = .{0} ** (display_width * display_height / 8),
@@ -75,14 +82,16 @@ flags_dirty: bool = false,
 pub fn initInPlace(cpu: *Cpu, program: []const u8, seed: u64, flags: [8]u8) error{ProgramTooLong}!void {
     cpu.* = Cpu{
         .rand = std.rand.DefaultPrng.init(seed),
-        .stack = std.BoundedArray(u12, stack_size).init(0) catch unreachable,
+        .stack = std.BoundedArray(u12, stack_size){},
         .flags = flags,
+        .mem = undefined,
     };
     if (program.len > (memory_size - initial_pc)) {
         return error.ProgramTooLong;
     }
-    @memcpy(cpu.mem[font_base_address..].ptr, font_data);
-    @memcpy(cpu.mem[initial_pc..].ptr, program);
+    @memset(&cpu.mem, 0);
+    @memcpy((&cpu.mem)[font_base_address..].ptr, font_data);
+    @memcpy((&cpu.mem)[initial_pc..].ptr, program);
     log.info("cpu init", .{});
 }
 
@@ -94,9 +103,7 @@ pub fn init(program: []const u8, seed: u64, flags: [8]u8) error{ProgramTooLong}!
 }
 
 pub fn cycle(self: *Cpu) !void {
-    const hi: u8 = @as([*]u8, @ptrCast(&self.mem))[self.pc];
-    const lo: u8 = @as([*]u8, @ptrCast(&self.mem))[self.pc + 1];
-    const opcode: u16 = (@as(u16, hi) << 8) + lo;
+    const opcode = std.mem.readInt(u16, (&self.mem)[self.pc..][0..2], .big);
     const inst = Instruction.decode(opcode);
     log.debug("{any}", .{inst});
     if (inst.exec(self) catch |e| {
@@ -164,7 +171,7 @@ pub fn getPixel(self: *const Cpu, x: u8, y: u8) u1 {
     const byte_index = pixel_index / 8;
     const bit_index: u3 = @truncate(pixel_index);
 
-    return @truncate(@as([*]const u8, @ptrCast(&self.display))[byte_index] >> bit_index);
+    return @truncate((&self.display)[byte_index] >> bit_index);
 }
 
 test "Cpu.init" {

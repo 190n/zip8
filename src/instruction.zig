@@ -3,6 +3,7 @@ const Instruction = @This();
 const std = @import("std");
 
 const Cpu = @import("./cpu.zig");
+const build_options = @import("build_options");
 
 /// 4-bit elements of opcode, most significant first
 nibbles: [4]u4,
@@ -116,7 +117,9 @@ fn op00EX(self: Instruction, cpu: *Cpu) !?u12 {
             @memset(&cpu.display, 0);
             cpu.display_dirty = true;
             draw_log.info("clear", .{});
-            cpu.draw_bytes_this_frame += 4;
+            if (build_options.experimental_render_hooks) {
+                cpu.draw_bytes_this_frame += 4;
+            }
             return null;
         },
         0x00EE => {
@@ -670,19 +673,23 @@ fn opDraw(self: Instruction, cpu: *Cpu) !?u12 {
             }
 
             const mem_index = y_sprite + cpu.I;
-            if ((cpu.mem_dirty[mem_index / 8] >> @truncate(mem_index)) & 0x01 != 0) {
-                any_bytes_dirty = true;
-                cpu.mem_dirty[mem_index / 8] ^= (@as(u8, 1) << @truncate(mem_index));
+            if (build_options.experimental_render_hooks) {
+                if ((cpu.mem_dirty[mem_index / 8] >> @truncate(mem_index)) & 0x01 != 0) {
+                    any_bytes_dirty = true;
+                    cpu.mem_dirty[mem_index / 8] ^= (@as(u8, 1) << @truncate(mem_index));
+                }
             }
         }
     }
 
-    if (any_bytes_dirty) {
-        draw_log.info("untaint: [{}, {})", .{ cpu.I, cpu.I + self.low4 });
-        cpu.draw_bytes_this_frame += self.low4;
+    if (build_options.experimental_render_hooks) {
+        if (any_bytes_dirty) {
+            draw_log.info("untaint: [{}, {})", .{ cpu.I, cpu.I + self.low4 });
+            cpu.draw_bytes_this_frame += self.low4;
+        }
+        draw_log.info("sprite: {} rows at ({}, {})", .{ sprite.len, x_start, y_start });
+        cpu.draw_bytes_this_frame += 4;
     }
-    draw_log.info("sprite: {} rows at ({}, {})", .{ sprite.len, x_start, y_start });
-    cpu.draw_bytes_this_frame += 4;
     return null;
 }
 
@@ -947,7 +954,9 @@ fn opStore(self: Instruction, cpu: *Cpu) !?u12 {
     for (0..(@as(u8, self.regX) + 1)) |offset| {
         cpu.mem[cpu.I] = cpu.V[offset];
         cpu.I +%= 1;
-        cpu.mem_dirty[cpu.I / 8] |= (@as(u8, 1) << @truncate(cpu.I));
+        if (build_options.experimental_render_hooks) {
+            cpu.mem_dirty[cpu.I / 8] |= (@as(u8, 1) << @truncate(cpu.I));
+        }
     }
     return null;
 }
@@ -982,7 +991,7 @@ test "FX55 store registers" {
 /// FX65: load values from memory starting at I into registers [V0, VX]; set I to I + X + 1
 fn opLoad(self: Instruction, cpu: *Cpu) !?u12 {
     for (0..(@as(u8, self.regX) + 1)) |offset| {
-        cpu.V[offset] = @as([*]const u8, @ptrCast(&cpu.mem))[cpu.I];
+        cpu.V[offset] = (&cpu.mem)[cpu.I];
         cpu.I +%= 1;
     }
     return null;

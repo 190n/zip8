@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
     const memory_size = b.option(
         u13,
         "memory_size",
-        "Size of the CHIP-8's memory. Higher than 4096 is unacceptable; lower than 4096 may break some programs.",
+        "Size of the CHIP-8's memory. Higher than 4096 is unacceptable; lower than 4096 may break some programs. Default 4096.",
     );
 
     const column_major_display = b.option(
@@ -35,9 +35,16 @@ pub fn build(b: *std.Build) void {
         "Whether the display should use column-major layout instead of row-major. Default false.",
     ) orelse false;
 
+    const experimental_render_hooks = b.option(
+        bool,
+        "experimental_render_hooks",
+        "Enable functions for tracking draw operations and tracking whether memory used by a draw has been modified",
+    ) orelse false;
+
     const options = b.addOptions();
     options.addOption(?u13, "memory_size", memory_size);
     options.addOption(bool, "column_major_display", column_major_display);
+    options.addOption(bool, "experimental_render_hooks", experimental_render_hooks);
     const options_module = options.createModule();
 
     const native_library = b.addSharedLibrary(.{
