@@ -11,12 +11,18 @@ pub const Cpu = struct {
     mem: [4096]u8,
     code: [4096]Inst,
     instructions: usize = 0,
+    random: std.rand.DefaultPrng,
 
     pub fn init(rom: []const u8) Cpu {
         var cpu = Cpu{
             .display = undefined,
             .mem = undefined,
             .code = undefined,
+            .random = std.rand.DefaultPrng.init(blk: {
+                var buf: u64 = undefined;
+                std.posix.getrandom(std.mem.asBytes(&buf)) catch unreachable;
+                break :blk buf;
+            }),
         };
         @memcpy(cpu.mem[0..font_data.len], font_data);
         @memset(cpu.mem[font_data.len..0x200], 0);
@@ -29,11 +35,11 @@ pub const Cpu = struct {
 
     pub fn run(self: *Cpu, instructions: usize) void {
         self.instructions = instructions;
-        self.code[self.pc].func(self, self.code[self.pc].decoded);
+        self.code[self.pc].func(self, self.code[self.pc].decoded.to());
     }
 };
 
-const GadgetFunc = *const fn (*Cpu, Decoded) callconv(.Unspecified) void;
+const GadgetFunc = *const fn (*Cpu, u32) callconv(.C) void;
 
 pub const Decoded = union {
     xy: [2]u4,
@@ -41,8 +47,7 @@ pub const Decoded = union {
     nnn: u12,
     xyn: [3]u4,
 
-    fn from(opcode: u16, cpu: *Cpu, which: enum { xy, xnn, nnn, xyn }) Decoded {
-        _ = cpu; // autofix
+    fn decode(opcode: u16, which: enum { xy, xnn, nnn, xyn }) Decoded {
         switch (which) {
             .xy => {
                 const x: u4 = @truncate(opcode >> 8);
@@ -63,6 +68,14 @@ pub const Decoded = union {
             },
         }
     }
+
+    pub inline fn from(x: u32) Decoded {
+        return @as(*const Decoded, @ptrCast(&x)).*;
+    }
+
+    pub inline fn to(self: Decoded) u32 {
+        return @as(*align(2) const u32, @ptrCast(&self)).*;
+    }
 };
 
 const Inst = struct {
@@ -70,7 +83,7 @@ const Inst = struct {
     decoded: Decoded,
 };
 
-fn decode(cpu: *Cpu, decoded: Decoded) void {
+fn decode(cpu: *Cpu, decoded: u32) callconv(.C) void {
     _ = decoded;
 
     const opcode = std.mem.readInt(u16, cpu.mem[cpu.pc..][0..2], .big);
@@ -80,16 +93,16 @@ fn decode(cpu: *Cpu, decoded: Decoded) void {
             0xEE => .{ .func = &funcs.ret, .decoded = undefined },
             else => .{ .func = &invalid, .decoded = undefined },
         },
-        0x1 => .{ .func = &funcs.jump, .decoded = Decoded.from(opcode, cpu, .nnn) },
-        0x2 => .{ .func = &funcs.call, .decoded = Decoded.from(opcode, cpu, .nnn) },
-        0x3 => .{ .func = &funcs.skipIfEqual, .decoded = Decoded.from(opcode, cpu, .xnn) },
-        0x4 => .{ .func = &funcs.skipIfNotEqual, .decoded = Decoded.from(opcode, cpu, .xnn) },
+        0x1 => .{ .func = &funcs.jump, .decoded = Decoded.decode(opcode, .nnn) },
+        0x2 => .{ .func = &funcs.call, .decoded = Decoded.decode(opcode, .nnn) },
+        0x3 => .{ .func = &funcs.skipIfEqual, .decoded = Decoded.decode(opcode, .xnn) },
+        0x4 => .{ .func = &funcs.skipIfNotEqual, .decoded = Decoded.decode(opcode, .xnn) },
         0x5 => switch (opcode & 0xf) {
-            0x0 => .{ .func = &funcs.skipIfRegistersEqual, .decoded = Decoded.from(opcode, cpu, .xy) },
+            0x0 => .{ .func = &funcs.skipIfRegistersEqual, .decoded = Decoded.decode(opcode, .xy) },
             else => .{ .func = &invalid, .decoded = undefined },
         },
-        0x6 => .{ .func = &funcs.setRegister, .decoded = Decoded.from(opcode, cpu, .xnn) },
-        0x7 => .{ .func = &funcs.addImmediate, .decoded = Decoded.from(opcode, cpu, .xnn) },
+        0x6 => .{ .func = &funcs.setRegister, .decoded = Decoded.decode(opcode, .xnn) },
+        0x7 => .{ .func = &funcs.addImmediate, .decoded = Decoded.decode(opcode, .xnn) },
         0x8 => .{
             .func = switch (@as(u4, @truncate(opcode))) {
                 0x0 => &funcs.setRegisterToRegister,
@@ -103,19 +116,19 @@ fn decode(cpu: *Cpu, decoded: Decoded) void {
                 0xE => &funcs.shiftLeft,
                 else => &invalid,
             },
-            .decoded = Decoded.from(opcode, cpu, .xy),
+            .decoded = Decoded.decode(opcode, .xy),
         },
         0x9 => switch (opcode & 0xf) {
-            0x0 => .{ .func = &funcs.skipIfRegistersNotEqual, .decoded = Decoded.from(opcode, cpu, .xy) },
+            0x0 => .{ .func = &funcs.skipIfRegistersNotEqual, .decoded = Decoded.decode(opcode, .xy) },
             else => .{ .func = &invalid, .decoded = undefined },
         },
-        0xA => .{ .func = &funcs.setI, .decoded = Decoded.from(opcode, cpu, .nnn) },
-        0xB => .{ .func = &funcs.jumpV0, .decoded = Decoded.from(opcode, cpu, .nnn) },
-        0xC => .{ .func = &funcs.random, .decoded = Decoded.from(opcode, cpu, .xnn) },
-        0xD => .{ .func = &funcs.draw, .decoded = Decoded.from(opcode, cpu, .xyn) },
+        0xA => .{ .func = &funcs.setI, .decoded = Decoded.decode(opcode, .nnn) },
+        0xB => .{ .func = &funcs.jumpV0, .decoded = Decoded.decode(opcode, .nnn) },
+        0xC => .{ .func = &funcs.random, .decoded = Decoded.decode(opcode, .xnn) },
+        0xD => .{ .func = &funcs.draw, .decoded = Decoded.decode(opcode, .xyn) },
         0xE => switch (opcode & 0xff) {
-            0x9E => .{ .func = &funcs.skipIfPressed, .decoded = Decoded.from(opcode, cpu, .xnn) },
-            0xA1 => .{ .func = &funcs.skipIfNotPressed, .decoded = Decoded.from(opcode, cpu, .xnn) },
+            0x9E => .{ .func = &funcs.skipIfPressed, .decoded = Decoded.decode(opcode, .xnn) },
+            0xA1 => .{ .func = &funcs.skipIfNotPressed, .decoded = Decoded.decode(opcode, .xnn) },
             else => .{ .func = &invalid, .decoded = undefined },
         },
         0xF => .{
@@ -133,14 +146,14 @@ fn decode(cpu: *Cpu, decoded: Decoded) void {
                 0x85 => &funcs.loadFlags,
                 else => &invalid,
             },
-            .decoded = Decoded.from(opcode, cpu, .xnn),
+            .decoded = Decoded.decode(opcode, .xnn),
         },
     };
     cpu.code[cpu.pc] = inst;
-    @call(.always_tail, inst.func, .{ cpu, inst.decoded });
+    @call(.always_tail, inst.func, .{ cpu, inst.decoded.to() });
 }
 
-fn invalid(cpu: *Cpu, decoded: Decoded) void {
+fn invalid(cpu: *Cpu, decoded: u32) callconv(.C) void {
     _ = decoded; // autofix
     std.debug.panic(
         "invalid instruction: {x:0>4}",
