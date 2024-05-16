@@ -1,10 +1,10 @@
 const std = @import("std");
 
-const Cpu = @import("./cpu.zig");
+const Cpu = @import("./tail.zig").Cpu;
 
-pub const std_options = std.Options{
-    .log_level = .warn,
-};
+// pub const std_options = std.Options{
+//     .log_level = .warn,
+// };
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -17,17 +17,20 @@ pub fn main() !void {
         return error.BadUsage;
     }
 
-    const rom = try std.fs.cwd().readFileAlloc(allocator, argv[1], Cpu.memory_size - Cpu.initial_pc);
+    const rom = try std.fs.cwd().readFileAlloc(allocator, argv[1], 4096 - 512);
     defer allocator.free(rom);
     const instructions = try std.fmt.parseInt(usize, argv[2], 10);
 
-    var cpu = try Cpu.init(rom, 0, .{0} ** 8);
+    var cpu = Cpu.init(rom);
 
     const before = std.posix.getrusage(std.posix.rusage.SELF);
-    for (0..instructions) |_| {
-        try cpu.cycle();
-        cpu.dt = 0;
-    }
+    // for (0..instructions) |_| {
+    //     try cpu.cycle();
+    //     cpu.dt = 0;
+    // }
+
+    cpu.run(instructions);
+
     const after = std.posix.getrusage(std.posix.rusage.SELF);
     const before_sec = @as(f64, @floatFromInt(before.utime.tv_sec)) +
         @as(f64, @floatFromInt(before.utime.tv_usec)) / 1_000_000.0;
