@@ -13,9 +13,7 @@ pub fn build(b: *std.Build) void {
     // Standard optimization options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall. Here we do not
     // set a preferred release mode, allowing the user to decide how to optimize.
-    const optimize = b.standardOptimizeOption(.{
-        .preferred_optimize_mode = .ReleaseSmall,
-    });
+    const optimize = b.standardOptimizeOption(.{});
 
     const use_avr_gcc = b.option(
         bool,
@@ -66,6 +64,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    // bench.root_module.strip = false;
     bench.root_module.addImport("build_options", options_module);
     const bench_runner = b.addInstallBinFile(bench.getEmittedBin(), "bench");
     const bench_install_step = b.step("bench", "Compile a benchmark harness");
