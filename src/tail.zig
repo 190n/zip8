@@ -1,6 +1,7 @@
 const std = @import("std");
 
 const font_data = @import("./font.zig").font_data;
+const tailfuncs = @import("./tailfuncs.zig");
 
 pub const Cpu = struct {
     v: [16]u8 = .{0} ** 16,
@@ -10,7 +11,7 @@ pub const Cpu = struct {
     display: [64 * 32 / 8]u8,
     mem: [4096]u8,
     code: [4096]Inst,
-    instructions: usize = 0,
+    instructions: u16 = 0,
     random: std.rand.DefaultPrng,
 
     pub fn init(rom: []const u8) Cpu {
@@ -33,19 +34,24 @@ pub const Cpu = struct {
         return cpu;
     }
 
-    pub fn run(self: *Cpu, instructions: usize) void {
+    pub fn run(self: *Cpu, instructions: u16) void {
         self.instructions = instructions;
-        self.code[self.pc].func(self, self.code[self.pc].decoded.to());
+        self.code[self.pc].func(self, self.code[self.pc].decoded.toInt());
     }
 };
 
-const GadgetFunc = *const fn (*Cpu, u32) callconv(.C) void;
+const GadgetFunc = *const fn (*Cpu, u32) void;
 
 pub const Decoded = union {
     xy: [2]u4,
     xnn: struct { u4, u8 },
     nnn: u12,
     xyn: [3]u4,
+
+    pub const Int = @Type(.{ .Int = .{
+        .signedness = .unsigned,
+        .bits = 8 * @sizeOf(Decoded),
+    } });
 
     fn decode(opcode: u16, which: enum { xy, xnn, nnn, xyn }) Decoded {
         switch (which) {
@@ -69,12 +75,12 @@ pub const Decoded = union {
         }
     }
 
-    pub inline fn from(x: u32) Decoded {
+    pub inline fn fromInt(x: Int) Decoded {
         return @as(*const Decoded, @ptrCast(&x)).*;
     }
 
-    pub inline fn to(self: Decoded) u32 {
-        return @as(*align(2) const u32, @ptrCast(&self)).*;
+    pub inline fn toInt(self: Decoded) Int {
+        return @as(*align(@alignOf(Decoded)) const Int, @ptrCast(&self)).*;
     }
 };
 
@@ -83,89 +89,77 @@ const Inst = struct {
     decoded: Decoded,
 };
 
-fn decode(cpu: *Cpu, decoded: u32) callconv(.C) void {
-    _ = decoded;
-
+pub fn decode(cpu: *Cpu, _: Decoded.Int) void {
     const opcode = std.mem.readInt(u16, cpu.mem[cpu.pc..][0..2], .big);
     const inst: Inst = switch (@as(u4, @truncate(opcode >> 12))) {
         0x0 => switch (opcode & 0xff) {
-            0xE0 => .{ .func = &funcs.clear, .decoded = undefined },
-            0xEE => .{ .func = &funcs.ret, .decoded = undefined },
+            0xE0 => .{ .func = &tailfuncs.clear, .decoded = undefined },
+            0xEE => .{ .func = &tailfuncs.ret, .decoded = undefined },
             else => .{ .func = &invalid, .decoded = undefined },
         },
-        0x1 => .{ .func = &funcs.jump, .decoded = Decoded.decode(opcode, .nnn) },
-        0x2 => .{ .func = &funcs.call, .decoded = Decoded.decode(opcode, .nnn) },
-        0x3 => .{ .func = &funcs.skipIfEqual, .decoded = Decoded.decode(opcode, .xnn) },
-        0x4 => .{ .func = &funcs.skipIfNotEqual, .decoded = Decoded.decode(opcode, .xnn) },
+        0x1 => .{ .func = &tailfuncs.jump, .decoded = Decoded.decode(opcode, .nnn) },
+        0x2 => .{ .func = &tailfuncs.call, .decoded = Decoded.decode(opcode, .nnn) },
+        0x3 => .{ .func = &tailfuncs.skipIfEqual, .decoded = Decoded.decode(opcode, .xnn) },
+        0x4 => .{ .func = &tailfuncs.skipIfNotEqual, .decoded = Decoded.decode(opcode, .xnn) },
         0x5 => switch (opcode & 0xf) {
-            0x0 => .{ .func = &funcs.skipIfRegistersEqual, .decoded = Decoded.decode(opcode, .xy) },
+            0x0 => .{ .func = &tailfuncs.skipIfRegistersEqual, .decoded = Decoded.decode(opcode, .xy) },
             else => .{ .func = &invalid, .decoded = undefined },
         },
-        0x6 => .{ .func = &funcs.setRegister, .decoded = Decoded.decode(opcode, .xnn) },
-        0x7 => .{ .func = &funcs.addImmediate, .decoded = Decoded.decode(opcode, .xnn) },
+        0x6 => .{ .func = &tailfuncs.setRegister, .decoded = Decoded.decode(opcode, .xnn) },
+        0x7 => .{ .func = &tailfuncs.addImmediate, .decoded = Decoded.decode(opcode, .xnn) },
         0x8 => .{
             .func = switch (@as(u4, @truncate(opcode))) {
-                0x0 => &funcs.setRegisterToRegister,
-                0x1 => &funcs.bitwiseOr,
-                0x2 => &funcs.bitwiseAnd,
-                0x3 => &funcs.bitwiseXor,
-                0x4 => &funcs.addRegisters,
-                0x5 => &funcs.subRegisters,
-                0x6 => &funcs.shiftRight,
-                0x7 => &funcs.subRegistersReverse,
-                0xE => &funcs.shiftLeft,
+                0x0 => &tailfuncs.setRegisterToRegister,
+                0x1 => &tailfuncs.bitwiseOr,
+                0x2 => &tailfuncs.bitwiseAnd,
+                0x3 => &tailfuncs.bitwiseXor,
+                0x4 => &tailfuncs.addRegisters,
+                0x5 => &tailfuncs.subRegisters,
+                0x6 => &tailfuncs.shiftRight,
+                0x7 => &tailfuncs.subRegistersReverse,
+                0xE => &tailfuncs.shiftLeft,
                 else => &invalid,
             },
             .decoded = Decoded.decode(opcode, .xy),
         },
         0x9 => switch (opcode & 0xf) {
-            0x0 => .{ .func = &funcs.skipIfRegistersNotEqual, .decoded = Decoded.decode(opcode, .xy) },
+            0x0 => .{ .func = &tailfuncs.skipIfRegistersNotEqual, .decoded = Decoded.decode(opcode, .xy) },
             else => .{ .func = &invalid, .decoded = undefined },
         },
-        0xA => .{ .func = &funcs.setI, .decoded = Decoded.decode(opcode, .nnn) },
-        0xB => .{ .func = &funcs.jumpV0, .decoded = Decoded.decode(opcode, .nnn) },
-        0xC => .{ .func = &funcs.random, .decoded = Decoded.decode(opcode, .xnn) },
-        0xD => .{ .func = &funcs.draw, .decoded = Decoded.decode(opcode, .xyn) },
+        0xA => .{ .func = &tailfuncs.setI, .decoded = Decoded.decode(opcode, .nnn) },
+        0xB => .{ .func = &tailfuncs.jumpV0, .decoded = Decoded.decode(opcode, .nnn) },
+        0xC => .{ .func = &tailfuncs.random, .decoded = Decoded.decode(opcode, .xnn) },
+        0xD => .{ .func = &tailfuncs.draw, .decoded = Decoded.decode(opcode, .xyn) },
         0xE => switch (opcode & 0xff) {
-            0x9E => .{ .func = &funcs.skipIfPressed, .decoded = Decoded.decode(opcode, .xnn) },
-            0xA1 => .{ .func = &funcs.skipIfNotPressed, .decoded = Decoded.decode(opcode, .xnn) },
+            0x9E => .{ .func = &tailfuncs.skipIfPressed, .decoded = Decoded.decode(opcode, .xnn) },
+            0xA1 => .{ .func = &tailfuncs.skipIfNotPressed, .decoded = Decoded.decode(opcode, .xnn) },
             else => .{ .func = &invalid, .decoded = undefined },
         },
         0xF => .{
             .func = switch (opcode & 0xff) {
-                0x07 => &funcs.readDt,
-                0x0A => &funcs.waitForKey,
-                0x15 => &funcs.setDt,
-                0x18 => &funcs.setSt,
-                0x1E => &funcs.incrementI,
-                0x29 => &funcs.setIToFont,
-                0x33 => &funcs.storeBcd,
-                0x55 => &funcs.store,
-                0x65 => &funcs.load,
-                0x75 => &funcs.storeFlags,
-                0x85 => &funcs.loadFlags,
+                0x07 => &tailfuncs.readDt,
+                0x0A => &tailfuncs.waitForKey,
+                0x15 => &tailfuncs.setDt,
+                0x18 => &tailfuncs.setSt,
+                0x1E => &tailfuncs.incrementI,
+                0x29 => &tailfuncs.setIToFont,
+                0x33 => &tailfuncs.storeBcd,
+                0x55 => &tailfuncs.store,
+                0x65 => &tailfuncs.load,
+                0x75 => &tailfuncs.storeFlags,
+                0x85 => &tailfuncs.loadFlags,
                 else => &invalid,
             },
             .decoded = Decoded.decode(opcode, .xnn),
         },
     };
     cpu.code[cpu.pc] = inst;
-    @call(.always_tail, inst.func, .{ cpu, inst.decoded.to() });
+    @call(.always_tail, inst.func, .{ cpu, inst.decoded.toInt() });
 }
 
-fn invalid(cpu: *Cpu, decoded: u32) callconv(.C) void {
-    _ = decoded; // autofix
+fn invalid(cpu: *Cpu, _: Decoded.Int) void {
     std.debug.panic(
         "invalid instruction: {x:0>4}",
         .{std.mem.readInt(u16, cpu.mem[cpu.pc..][0..2], .big)},
     );
 }
-
-const funcs = @import("./tailfuncs.zig");
-
-// export fn inc_stub(cpu: *Cpu, decoded: Decoded, pc: u16) void {
-//     // const decoded: Decoded = @bitCast(decoded_i);
-//     decoded.xy[0].*, cpu.v[0xf] = @addWithOverflow(decoded.xy[0].*, decoded.xy[1].*);
-//     const next = cpu.code[cpu.pc + 2];
-//     @call(.always_tail, next.func, .{ cpu, next.decoded, pc + 2 });
-// }

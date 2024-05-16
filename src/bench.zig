@@ -19,17 +19,17 @@ pub fn main() !void {
 
     const rom = try std.fs.cwd().readFileAlloc(allocator, argv[1], 4096 - 512);
     defer allocator.free(rom);
-    const instructions = try std.fmt.parseInt(usize, argv[2], 10);
+    var instructions = try std.fmt.parseInt(usize, argv[2], 10);
 
     var cpu = Cpu.init(rom);
 
     const before = std.posix.getrusage(std.posix.rusage.SELF);
-    // for (0..instructions) |_| {
-    //     try cpu.cycle();
-    //     cpu.dt = 0;
-    // }
 
-    cpu.run(instructions);
+    while (instructions > 0) {
+        const to_run = @min(instructions, std.math.maxInt(u16));
+        cpu.run(to_run);
+        instructions -= to_run;
+    }
 
     const after = std.posix.getrusage(std.posix.rusage.SELF);
     const before_sec = @as(f64, @floatFromInt(before.utime.tv_sec)) +
