@@ -11,12 +11,18 @@ pub const Cpu = struct {
     mem: [4096]u8,
     code: [4096]Inst,
     instructions: usize = 0,
+    random: std.rand.DefaultPrng,
 
     pub fn init(rom: []const u8) Cpu {
         var cpu = Cpu{
             .display = undefined,
             .mem = undefined,
             .code = undefined,
+            .random = std.rand.DefaultPrng.init(blk: {
+                var buf: u64 = undefined;
+                std.posix.getrandom(std.mem.asBytes(&buf)) catch unreachable;
+                break :blk buf;
+            }),
         };
         @memcpy(cpu.mem[0..font_data.len], font_data);
         @memset(cpu.mem[font_data.len..0x200], 0);

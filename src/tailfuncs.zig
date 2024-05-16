@@ -42,14 +42,16 @@ pub fn call(cpu: *Cpu, decoded: Decoded) void {
 
 /// 3XNN: skip next instruction if VX == NN
 pub fn skipIfEqual(cpu: *Cpu, decoded: Decoded) void {
-    _ = decoded;
-    std.debug.panic("skipIfEqual at {x:0>3}", .{cpu.pc});
+    const x, const nn = decoded.xnn;
+    cpu.pc += if (cpu.v[x] == nn) 4 else 2;
+    cont(cpu);
 }
 
 /// 4XNN: skip next instruction if VX != NN
 pub fn skipIfNotEqual(cpu: *Cpu, decoded: Decoded) void {
-    _ = decoded;
-    std.debug.panic("skipIfNotEqual at {x:0>3}", .{cpu.pc});
+    const x, const nn = decoded.xnn;
+    cpu.pc += if (cpu.v[x] != nn) 4 else 2;
+    cont(cpu);
 }
 
 /// 5XY0: skip next instruction if VX == VY
@@ -68,8 +70,10 @@ pub fn setRegister(cpu: *Cpu, decoded: Decoded) void {
 
 /// 7XNN: add NN to VX without carry
 pub fn addImmediate(cpu: *Cpu, decoded: Decoded) void {
-    _ = decoded;
-    std.debug.panic("addImmediate at {x:0>3}", .{cpu.pc});
+    const x, const nn = decoded.xnn;
+    cpu.v[x] +%= nn;
+    cpu.pc += 2;
+    cont(cpu);
 }
 
 /// 8XY0: set VX to VY
@@ -86,8 +90,10 @@ pub fn bitwiseOr(cpu: *Cpu, decoded: Decoded) void {
 
 /// 8XY2: set VX to VX & VY
 pub fn bitwiseAnd(cpu: *Cpu, decoded: Decoded) void {
-    _ = decoded;
-    std.debug.panic("bitwiseAnd at {x:0>3}", .{cpu.pc});
+    const x, const y = decoded.xy;
+    cpu.v[x] &= cpu.v[y];
+    cpu.pc += 2;
+    cont(cpu);
 }
 
 /// 8XY3: set VX to VX ^ VY
@@ -106,8 +112,11 @@ pub fn addRegisters(cpu: *Cpu, decoded: Decoded) void {
 
 /// 8XY5: set VX to VX - VY; set VF to 0 if borrow occurred, 1 otherwise
 pub fn subRegisters(cpu: *Cpu, decoded: Decoded) void {
-    _ = decoded;
-    std.debug.panic("subRegisters at {x:0>3}", .{cpu.pc});
+    const x, const y = decoded.xy;
+    cpu.v[x], const overflow = @subWithOverflow(cpu.v[x], cpu.v[y]);
+    cpu.v[0xF] = ~overflow;
+    cpu.pc += 2;
+    cont(cpu);
 }
 
 /// 8XY6: set VX to VY >> 1, set VF to the former least significant bit of VY
@@ -124,8 +133,11 @@ pub fn subRegistersReverse(cpu: *Cpu, decoded: Decoded) void {
 
 /// 8XYE: set VX to VY << 1, set VF to the former most significant bit of VY
 pub fn shiftLeft(cpu: *Cpu, decoded: Decoded) void {
-    _ = decoded;
-    std.debug.panic("shiftLeft at {x:0>3}", .{cpu.pc});
+    const x, const y = decoded.xy;
+    cpu.v[0xF] = (cpu.v[x] >> 7) & 1;
+    cpu.v[x] = cpu.v[y] << 1;
+    cpu.pc += 2;
+    cont(cpu);
 }
 
 /// 9XY0: skip next instruction if VX != VY
@@ -136,8 +148,9 @@ pub fn skipIfRegistersNotEqual(cpu: *Cpu, decoded: Decoded) void {
 
 /// ANNN: set I to NNN
 pub fn setI(cpu: *Cpu, decoded: Decoded) void {
-    _ = decoded;
-    std.debug.panic("setI at {x:0>3}", .{cpu.pc});
+    cpu.i = decoded.nnn;
+    cpu.pc += 2;
+    cont(cpu);
 }
 
 /// BNNN: jump to NNN + V0
@@ -148,8 +161,11 @@ pub fn jumpV0(cpu: *Cpu, decoded: Decoded) void {
 
 /// CXNN: set VX to rand() & NN
 pub fn random(cpu: *Cpu, decoded: Decoded) void {
-    _ = decoded;
-    std.debug.panic("random at {x:0>3}", .{cpu.pc});
+    const x, const nn = decoded.xnn;
+    const byte = cpu.random.random().int(u8);
+    cpu.v[x] = byte & nn;
+    cpu.pc += 2;
+    cont(cpu);
 }
 
 /// DXYN: draw an 8xN sprite from memory starting at I at (VX, VY); set VF to 1 if any pixel was
@@ -221,8 +237,11 @@ pub fn store(cpu: *Cpu, decoded: Decoded) void {
 
 /// FX65: load values from memory starting at I into registers [V0, VX]; set I to I + X + 1
 pub fn load(cpu: *Cpu, decoded: Decoded) void {
-    _ = decoded;
-    std.debug.panic("load at {x:0>3}", .{cpu.pc});
+    const x, _ = decoded.xnn;
+    @memcpy(cpu.v[0 .. x + 1], cpu.mem[cpu.i .. cpu.i + x + 1]);
+    cpu.i = cpu.i + x + 1;
+    cpu.pc += 2;
+    cont(cpu);
 }
 
 /// FX75: store registers [V0, VX] in flags. X < 8
