@@ -1022,6 +1022,7 @@ test "FX65 load registers" {
     try std.testing.expectEqual(std.mem.zeroes([16]u8), cpu.V);
 }
 
+/// FX75: store registers [V0, VX] in flags. X < 8
 fn opSaveFlags(self: Instruction, cpu: *Cpu) !?u12 {
     if (self.regX > 8) return error.FlagOverflow;
     @memcpy(cpu.flags[0 .. self.regX + 1], cpu.V[0 .. self.regX + 1]);
@@ -1042,6 +1043,7 @@ test "FX75 save flags" {
     try std.testing.expectEqual([_]u8{ 0x11, 0x22, 0, 0, 0, 0, 0, 0xff }, cpu.flags);
 }
 
+/// FX75: load flags into [V0, VX]. X < 8
 fn opLoadFlags(self: Instruction, cpu: *Cpu) !?u12 {
     if (self.regX > 8) return error.FlagOverflow;
     @memcpy(cpu.V[0 .. self.regX + 1], cpu.flags[0 .. self.regX + 1]);
