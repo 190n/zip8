@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
 
     const native_library = b.addSharedLibrary(.{
         .name = "zip8",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -58,12 +58,31 @@ pub fn build(b: *std.Build) void {
         native_library.getEmittedBin(),
         b.fmt("libzip8{s}", .{target.result.dynamicLibSuffix()}),
     );
+    b.default_step.dependOn(&native_library_install.step);
+
+    const bench = b.addExecutable(.{
+        .name = "bench",
+        .root_source_file = b.path("src/bench.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    bench.root_module.addImport("build_options", options_module);
+    const bench_runner = b.addInstallBinFile(bench.getEmittedBin(), "bench");
+    const bench_install_step = b.step("bench", "Compile a benchmark harness");
+    bench_install_step.dependOn(&bench_runner.step);
+
+    const bench_run = b.addRunArtifact(bench);
+    if (b.args) |args| {
+        bench_run.addArgs(args);
+    }
+    const bench_run_step = b.step("run-bench", "Run the benchmark");
+    bench_run_step.dependOn(&bench_run.step);
 
     const wasm_library = b.addExecutable(.{
         .name = "zip8",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = b.resolveTargetQuery(.{
             .cpu_arch = .wasm32,
             .os_tag = .freestanding,
@@ -103,7 +122,7 @@ pub fn build(b: *std.Build) void {
         .name = "zip8",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = b.resolveTargetQuery(.{
             .cpu_arch = .thumb,
             .os_tag = .freestanding,
@@ -118,7 +137,7 @@ pub fn build(b: *std.Build) void {
     // build a static library for AVR
     const atmega4809_library = b.addStaticLibrary(.{
         .name = "zip8",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = b.resolveTargetQuery(.{
             .cpu_arch = .avr,
             .os_tag = .freestanding,
@@ -192,11 +211,9 @@ pub fn build(b: *std.Build) void {
     const atmega4809_step = b.step("atmega4809", "Output a static library for ATmega4809");
     atmega4809_step.dependOn(&atmega4809_library_install.step);
 
-    b.default_step.dependOn(&native_library_install.step);
-
     // Creates a step for unit testing.
     const exe_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
