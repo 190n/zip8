@@ -64,7 +64,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    // bench.root_module.strip = false;
     bench.root_module.addImport("build_options", options_module);
     const bench_runner = b.addInstallBinFile(bench.getEmittedBin(), "bench");
     const bench_install_step = b.step("bench", "Compile a benchmark harness");
