@@ -19,14 +19,14 @@ inline fn cont(cpu: *Cpu, comptime inc_by_2: bool) void {
 
 /// 00E0: clear the screen
 pub fn clear(cpu: *Cpu, decoded: Decoded.Int) void {
-    _ = decoded;
+    _ = Decoded.fromInt(decoded).none;
     @memset(&cpu.display, 0);
     cont(cpu, true);
 }
 
 /// 00EE: return
 pub fn ret(cpu: *Cpu, decoded: Decoded.Int) void {
-    _ = decoded;
+    _ = Decoded.fromInt(decoded).none;
     cpu.pc = cpu.stack.popOrNull() orelse @panic("empty stack");
     cont(cpu, false);
 }
@@ -127,8 +127,10 @@ pub fn shiftRight(cpu: *Cpu, decoded: Decoded.Int) void {
 
 /// 8XY7: set VX to VY - VX; set VF to 0 if borrow occurred, 1 otherwise
 pub fn subRegistersReverse(cpu: *Cpu, decoded: Decoded.Int) void {
-    _ = decoded;
-    std.debug.panic("subRegistersReverse at {x:0>3}", .{cpu.pc});
+    const x, const y = Decoded.fromInt(decoded).xy;
+    cpu.v[x], const overflow = @subWithOverflow(cpu.v[y], cpu.v[x]);
+    cpu.v[0xF] = ~overflow;
+    cont(cpu, true);
 }
 
 /// 8XYE: set VX to VY << 1, set VF to the former most significant bit of VY
@@ -168,9 +170,25 @@ pub fn random(cpu: *Cpu, decoded: Decoded.Int) void {
 /// DXYN: draw an 8xN sprite from memory starting at I at (VX, VY); set VF to 1 if any pixel was
 /// turned off, 0 otherwise
 pub fn draw(cpu: *Cpu, decoded: Decoded.Int) void {
-    _ = decoded;
-    // std.debug.panic("draw at {x:0>3}, {} to go", .{ cpu.pc, cpu.instructions });
-    std.log.warn("draw", .{});
+    const x_reg, const y_reg, const n = Decoded.fromInt(decoded).xyn;
+    const x: u16 = cpu.v[x_reg] % 64;
+    const y: u16 = cpu.v[y_reg] % 32;
+    var intersect: u8 = 0;
+    for (0..@min(n, 32 - y)) |row| {
+        const left = @bitReverse(cpu.mem[cpu.i + row]) << @truncate(x % 8);
+        const right = if (x % 8 == 0)
+            0
+        else
+            @bitReverse(cpu.mem[cpu.i + row]) >> @truncate(8 - (x % 8));
+        const index = (64 * (y + row) + x) / 8;
+        intersect |= (cpu.display[index] & left);
+        cpu.display[index] ^= left;
+        if (x < 56) {
+            intersect |= (cpu.display[index + 1] & right);
+            cpu.display[index + 1] ^= right;
+        }
+    }
+    cpu.v[0xF] = @intFromBool(intersect != 0);
     cont(cpu, true);
 }
 
@@ -188,8 +206,9 @@ pub fn skipIfNotPressed(cpu: *Cpu, decoded: Decoded.Int) void {
 
 /// FX07: store the value of the delay timer in VX
 pub fn readDt(cpu: *Cpu, decoded: Decoded.Int) void {
-    _ = decoded;
-    std.debug.panic("readDt at {x:0>3}", .{cpu.pc});
+    const x, _ = Decoded.fromInt(decoded).xnn;
+    cpu.v[x] = cpu.dt;
+    cont(cpu, true);
 }
 
 /// FX0A: wait until any key is pressed, then store the key that was pressed in VX
@@ -200,8 +219,9 @@ pub fn waitForKey(cpu: *Cpu, decoded: Decoded.Int) void {
 
 /// FX15: set the delay timer to the value of VX
 pub fn setDt(cpu: *Cpu, decoded: Decoded.Int) void {
-    _ = decoded;
-    std.debug.panic("setDt at {x:0>3}", .{cpu.pc});
+    const x, _ = Decoded.fromInt(decoded).xnn;
+    cpu.dt = cpu.v[x];
+    cont(cpu, true);
 }
 
 /// FX18: set the sound timer to the value of VX
@@ -237,16 +257,16 @@ pub fn storeBcd(cpu: *Cpu, decoded: Decoded.Int) void {
 
 /// FX55: store registers [V0, VX] in memory starting at I; set I to I + X + 1
 pub fn store(cpu: *Cpu, decoded: Decoded.Int) void {
-    const x, _ = Decoded.fromInt(decoded).xnn;
+    const x: u8, _ = Decoded.fromInt(decoded).xnn;
     @memcpy(cpu.mem[cpu.i..][0 .. x + 1], cpu.v[0 .. x + 1]);
-    @memset(cpu.code[cpu.i..][0 .. x + 1], .{ .func = &tail.decode, .decoded = undefined });
+    @memset(cpu.code[cpu.i - 1 ..][0 .. x + 2], .{ .func = &tail.decode, .decoded = undefined });
     cpu.i = cpu.i + x + 1;
     cont(cpu, true);
 }
 
 /// FX65: load values from memory starting at I into registers [V0, VX]; set I to I + X + 1
 pub fn load(cpu: *Cpu, decoded: Decoded.Int) void {
-    const x, _ = Decoded.fromInt(decoded).xnn;
+    const x: u8, _ = Decoded.fromInt(decoded).xnn;
     @memcpy(cpu.v[0 .. x + 1], cpu.mem[cpu.i .. cpu.i + x + 1]);
     cpu.i = cpu.i + x + 1;
     cont(cpu, true);

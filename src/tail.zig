@@ -12,6 +12,8 @@ pub const Cpu = struct {
     mem: [4096]u8,
     code: [4096]Inst,
     instructions: u16 = 0,
+    dt: u8 = 0,
+    st: u8 = 0,
     random: std.rand.DefaultPrng,
 
     pub fn init(rom: []const u8) Cpu {
@@ -30,13 +32,18 @@ pub const Cpu = struct {
         @memcpy(cpu.mem[0x200..][0..rom.len], rom);
         @memset(cpu.mem[0x200 + rom.len ..], 0);
         @memset(&cpu.display, 0);
-        @memset(&cpu.code, .{ .func = &decode, .decoded = undefined });
+        @memset(&cpu.code, .{ .func = &decode, .decoded = .{ .none = {} } });
         return cpu;
     }
 
     pub fn run(self: *Cpu, instructions: u16) void {
         self.instructions = instructions;
         self.code[self.pc].func(self, self.code[self.pc].decoded.toInt());
+    }
+
+    pub fn timerTick(self: *Cpu) void {
+        self.dt -|= 1;
+        self.st -|= 1;
     }
 };
 
@@ -47,6 +54,7 @@ pub const Decoded = union {
     xnn: struct { u4, u8 },
     nnn: u12,
     xyn: [3]u4,
+    none: void,
 
     pub const Int = @Type(.{ .Int = .{
         .signedness = .unsigned,
@@ -93,9 +101,9 @@ pub fn decode(cpu: *Cpu, _: Decoded.Int) void {
     const opcode = std.mem.readInt(u16, cpu.mem[cpu.pc..][0..2], .big);
     const inst: Inst = switch (@as(u4, @truncate(opcode >> 12))) {
         0x0 => switch (opcode & 0xff) {
-            0xE0 => .{ .func = &tailfuncs.clear, .decoded = undefined },
-            0xEE => .{ .func = &tailfuncs.ret, .decoded = undefined },
-            else => .{ .func = &invalid, .decoded = undefined },
+            0xE0 => .{ .func = &tailfuncs.clear, .decoded = .{ .none = {} } },
+            0xEE => .{ .func = &tailfuncs.ret, .decoded = .{ .none = {} } },
+            else => .{ .func = &invalid, .decoded = .{ .none = {} } },
         },
         0x1 => .{ .func = &tailfuncs.jump, .decoded = Decoded.decode(opcode, .nnn) },
         0x2 => .{ .func = &tailfuncs.call, .decoded = Decoded.decode(opcode, .nnn) },
@@ -103,7 +111,7 @@ pub fn decode(cpu: *Cpu, _: Decoded.Int) void {
         0x4 => .{ .func = &tailfuncs.skipIfNotEqual, .decoded = Decoded.decode(opcode, .xnn) },
         0x5 => switch (opcode & 0xf) {
             0x0 => .{ .func = &tailfuncs.skipIfRegistersEqual, .decoded = Decoded.decode(opcode, .xy) },
-            else => .{ .func = &invalid, .decoded = undefined },
+            else => .{ .func = &invalid, .decoded = .{ .none = {} } },
         },
         0x6 => .{ .func = &tailfuncs.setRegister, .decoded = Decoded.decode(opcode, .xnn) },
         0x7 => .{ .func = &tailfuncs.addImmediate, .decoded = Decoded.decode(opcode, .xnn) },
@@ -124,7 +132,7 @@ pub fn decode(cpu: *Cpu, _: Decoded.Int) void {
         },
         0x9 => switch (opcode & 0xf) {
             0x0 => .{ .func = &tailfuncs.skipIfRegistersNotEqual, .decoded = Decoded.decode(opcode, .xy) },
-            else => .{ .func = &invalid, .decoded = undefined },
+            else => .{ .func = &invalid, .decoded = .{ .none = {} } },
         },
         0xA => .{ .func = &tailfuncs.setI, .decoded = Decoded.decode(opcode, .nnn) },
         0xB => .{ .func = &tailfuncs.jumpV0, .decoded = Decoded.decode(opcode, .nnn) },
@@ -133,7 +141,7 @@ pub fn decode(cpu: *Cpu, _: Decoded.Int) void {
         0xE => switch (opcode & 0xff) {
             0x9E => .{ .func = &tailfuncs.skipIfPressed, .decoded = Decoded.decode(opcode, .xnn) },
             0xA1 => .{ .func = &tailfuncs.skipIfNotPressed, .decoded = Decoded.decode(opcode, .xnn) },
-            else => .{ .func = &invalid, .decoded = undefined },
+            else => .{ .func = &invalid, .decoded = .{ .none = {} } },
         },
         0xF => .{
             .func = switch (opcode & 0xff) {
@@ -159,7 +167,10 @@ pub fn decode(cpu: *Cpu, _: Decoded.Int) void {
 
 fn invalid(cpu: *Cpu, _: Decoded.Int) void {
     std.debug.panic(
-        "invalid instruction: {x:0>4}",
-        .{std.mem.readInt(u16, cpu.mem[cpu.pc..][0..2], .big)},
+        "invalid instruction: {X:0>4} at 0x{X:0>3}",
+        .{
+            std.mem.readInt(u16, cpu.mem[cpu.pc..][0..2], .big),
+            cpu.pc,
+        },
     );
 }
