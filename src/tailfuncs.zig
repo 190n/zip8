@@ -179,10 +179,9 @@ pub fn setI(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
 
 /// BNNN: jump to NNN + V0
 pub fn jumpV0(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
-    _ = i;
     _ = pc;
-    _ = decoded;
-    std.debug.panic("jumpV0 at {x:0>3}", .{cpu.pc});
+    const new_pc = &cpu.code[Decoded.fromInt(decoded).nnn + cpu.v[0]];
+    cont(cpu, @ptrCast(new_pc), i, false);
 }
 
 /// CXNN: set VX to rand() & NN
