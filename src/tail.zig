@@ -38,7 +38,12 @@ pub const Cpu = struct {
 
     pub fn run(self: *Cpu, instructions: u16) void {
         self.instructions = instructions;
-        self.code[self.pc].func(self, self.code[self.pc].decoded.toInt(), (&self.code).ptr + self.pc);
+        self.code[self.pc].func(
+            self,
+            self.code[self.pc].decoded.toInt(),
+            self.code[self.pc..].ptr,
+            self.mem[self.i..].ptr,
+        );
     }
 
     pub fn timerTick(self: *Cpu) void {
@@ -47,7 +52,7 @@ pub const Cpu = struct {
     }
 };
 
-const GadgetFunc = *const fn (*Cpu, u32, [*]Inst) void;
+const GadgetFunc = *const fn (*Cpu, u32, [*]Inst, [*]u8) void;
 
 pub const Decoded = union {
     xy: [2]u4,
@@ -97,7 +102,7 @@ pub const Inst = struct {
     decoded: Decoded,
 };
 
-pub fn decode(cpu: *Cpu, _: Decoded.Int, pc: [*]Inst) void {
+pub fn decode(cpu: *Cpu, _: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
     const pc_n = (@intFromPtr(pc) - @intFromPtr(&cpu.code)) / @sizeOf(Inst);
     const opcode = std.mem.readInt(u16, cpu.mem[pc_n..][0..2], .big);
     const inst: Inst = switch (@as(u4, @truncate(opcode >> 12))) {
@@ -163,10 +168,12 @@ pub fn decode(cpu: *Cpu, _: Decoded.Int, pc: [*]Inst) void {
         },
     };
     pc[0] = inst;
-    @call(.always_tail, inst.func, .{ cpu, inst.decoded.toInt(), pc });
+    @call(.always_tail, inst.func, .{ cpu, inst.decoded.toInt(), pc, i });
 }
 
-fn invalid(cpu: *Cpu, _: Decoded.Int, pc: [*]Inst) void {
+fn invalid(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
+    _ = decoded;
+    _ = i;
     const pc_n = (@intFromPtr(pc) - @intFromPtr(&cpu.code)) / @sizeOf(Inst);
     std.debug.panic(
         "invalid instruction: {X:0>4} at 0x{X:0>3}",
