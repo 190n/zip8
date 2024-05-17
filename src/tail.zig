@@ -7,7 +7,7 @@ pub const Cpu = struct {
     v: [16]u8 = .{0} ** 16,
     i: u12 = 0,
     pc: u12 = 0x200,
-    stack: std.BoundedArray(u12, 16) = .{},
+    stack: std.BoundedArray([*]Inst, 16) = .{},
     display: [64 * 32 / 8]u8,
     mem: [4096]u8,
     code: [4096]Inst,
@@ -38,7 +38,7 @@ pub const Cpu = struct {
 
     pub fn run(self: *Cpu, instructions: u16) void {
         self.instructions = instructions;
-        self.code[self.pc].func(self, self.code[self.pc].decoded.toInt(), self.pc);
+        self.code[self.pc].func(self, self.code[self.pc].decoded.toInt(), (&self.code).ptr + self.pc);
     }
 
     pub fn timerTick(self: *Cpu) void {
@@ -47,7 +47,7 @@ pub const Cpu = struct {
     }
 };
 
-const GadgetFunc = *const fn (*Cpu, u32, u12) void;
+const GadgetFunc = *const fn (*Cpu, u32, [*]Inst) void;
 
 pub const Decoded = union {
     xy: [2]u4,
@@ -92,13 +92,14 @@ pub const Decoded = union {
     }
 };
 
-const Inst = struct {
+pub const Inst = struct {
     func: GadgetFunc,
     decoded: Decoded,
 };
 
-pub fn decode(cpu: *Cpu, _: Decoded.Int, pc: u12) void {
-    const opcode = std.mem.readInt(u16, cpu.mem[pc..][0..2], .big);
+pub fn decode(cpu: *Cpu, _: Decoded.Int, pc: [*]Inst) void {
+    const pc_n = (@intFromPtr(pc) - @intFromPtr(&cpu.code)) / @sizeOf(Inst);
+    const opcode = std.mem.readInt(u16, cpu.mem[pc_n..][0..2], .big);
     const inst: Inst = switch (@as(u4, @truncate(opcode >> 12))) {
         0x0 => switch (opcode & 0xff) {
             0xE0 => .{ .func = &tailfuncs.clear, .decoded = .{ .none = {} } },
@@ -161,16 +162,17 @@ pub fn decode(cpu: *Cpu, _: Decoded.Int, pc: u12) void {
             .decoded = Decoded.decode(opcode, .xnn),
         },
     };
-    cpu.code[pc] = inst;
+    pc[0] = inst;
     @call(.always_tail, inst.func, .{ cpu, inst.decoded.toInt(), pc });
 }
 
-fn invalid(cpu: *Cpu, _: Decoded.Int, pc: u12) void {
+fn invalid(cpu: *Cpu, _: Decoded.Int, pc: [*]Inst) void {
+    const pc_n = (@intFromPtr(pc) - @intFromPtr(&cpu.code)) / @sizeOf(Inst);
     std.debug.panic(
         "invalid instruction: {X:0>4} at 0x{X:0>3}",
         .{
-            std.mem.readInt(u16, cpu.mem[pc..][0..2], .big),
-            pc,
+            std.mem.readInt(u16, cpu.mem[pc_n..][0..2], .big),
+            pc_n,
         },
     );
 }
