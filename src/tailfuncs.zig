@@ -186,10 +186,7 @@ pub fn draw(cpu: *Cpu, decoded: Decoded.Int, pc: u12) void {
     var intersect: u8 = 0;
     for (0..@min(n, 32 - y)) |row| {
         const left = @bitReverse(cpu.mem[cpu.i + row]) << @truncate(x % 8);
-        const right = if (x % 8 == 0)
-            0
-        else
-            @bitReverse(cpu.mem[cpu.i + row]) >> @truncate(8 - (x % 8));
+        const right: u8 = @truncate(@as(u16, @bitReverse(cpu.mem[cpu.i + row])) >> @truncate(8 - (x % 8)));
         const index = (64 * (y + row) + x) / 8;
         intersect |= (cpu.display[index] & left);
         cpu.display[index] ^= left;
