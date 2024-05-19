@@ -60,23 +60,22 @@ pub fn call(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
 /// 3XNN: skip next instruction if VX == NN
 pub fn skipIfEqual(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
     const x, const nn = Decoded.fromInt(decoded).xnn;
-    const new_pc = pc + @as(usize, if (cpu.v[x] == nn) 4 else 2);
+    const new_pc = if (cpu.v[x] == nn) pc + 4 else pc + 2;
     cont(cpu, new_pc, i, false);
 }
 
 /// 4XNN: skip next instruction if VX != NN
 pub fn skipIfNotEqual(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
     const x, const nn = Decoded.fromInt(decoded).xnn;
-    const new_pc = pc + @as(u12, if (cpu.v[x] != nn) 4 else 2);
+    const new_pc = if (cpu.v[x] != nn) pc + 4 else pc + 2;
     cont(cpu, new_pc, i, false);
 }
 
 /// 5XY0: skip next instruction if VX == VY
 pub fn skipIfRegistersEqual(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
-    _ = i;
-    _ = pc;
-    _ = decoded;
-    std.debug.panic("skipIfRegistersEqual at {x:0>3}", .{cpu.pc});
+    const x, const y = Decoded.fromInt(decoded).xy;
+    const new_pc = if (cpu.v[x] == cpu.v[y]) pc + 4 else pc + 2;
+    cont(cpu, new_pc, i, false);
 }
 
 /// 6XNN: set VX to NN
@@ -102,10 +101,9 @@ pub fn setRegisterToRegister(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*
 
 /// 8XY1: set VX to VX | VY
 pub fn bitwiseOr(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
-    _ = i;
-    _ = pc;
-    _ = decoded;
-    std.debug.panic("bitwiseOr at {x:0>3}", .{cpu.pc});
+    const x, const y = Decoded.fromInt(decoded).xy;
+    cpu.v[x] |= cpu.v[y];
+    cont(cpu, pc, i, true);
 }
 
 /// 8XY2: set VX to VX & VY
@@ -117,10 +115,9 @@ pub fn bitwiseAnd(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
 
 /// 8XY3: set VX to VX ^ VY
 pub fn bitwiseXor(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
-    _ = i;
-    _ = pc;
-    _ = decoded;
-    std.debug.panic("bitwiseXor at {x:0>3}", .{cpu.pc});
+    const x, const y = Decoded.fromInt(decoded).xy;
+    cpu.v[x] ^= cpu.v[y];
+    cont(cpu, pc, i, true);
 }
 
 /// 8XY4: set VX to VX + VY; set VF to 1 if carry occurred, 0 otherwise
@@ -140,10 +137,10 @@ pub fn subRegisters(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void
 
 /// 8XY6: set VX to VY >> 1, set VF to the former least significant bit of VY
 pub fn shiftRight(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
-    _ = i;
-    _ = pc;
-    _ = decoded;
-    std.debug.panic("shiftRight at {x:0>3}", .{cpu.pc});
+    const x, const y = Decoded.fromInt(decoded).xy;
+    cpu.v[0xF] = cpu.v[y] & 1;
+    cpu.v[x] = cpu.v[y] >> 1;
+    cont(cpu, pc, i, true);
 }
 
 /// 8XY7: set VX to VY - VX; set VF to 0 if borrow occurred, 1 otherwise
@@ -164,10 +161,9 @@ pub fn shiftLeft(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
 
 /// 9XY0: skip next instruction if VX != VY
 pub fn skipIfRegistersNotEqual(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
-    _ = i;
-    _ = pc;
-    _ = decoded;
-    std.debug.panic("skipIfRegistersNotEqual at {x:0>3}", .{cpu.pc});
+    const x, const y = Decoded.fromInt(decoded).xy;
+    const new_pc = if (cpu.v[x] != cpu.v[y]) pc + 4 else pc + 2;
+    cont(cpu, new_pc, i, false);
 }
 
 /// ANNN: set I to NNN
@@ -254,10 +250,9 @@ pub fn setDt(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
 
 /// FX18: set the sound timer to the value of VX
 pub fn setSt(cpu: *Cpu, decoded: Decoded.Int, pc: [*]Inst, i: [*]u8) void {
-    _ = i;
-    _ = pc;
-    _ = decoded;
-    std.debug.panic("setSt at {x:0>3}", .{cpu.pc});
+    const x, _ = Decoded.fromInt(decoded).xnn;
+    cpu.st = cpu.v[x];
+    cont(cpu, pc, i, true);
 }
 
 /// FX1E: increment I by the value of VX
