@@ -52,7 +52,12 @@ pub const Cpu = struct {
     }
 };
 
-const GadgetFunc = *const fn (*Cpu, u32, [*]Inst, [*]u8) void;
+const GadgetFunc = *const fn (
+    cpu: *Cpu,
+    decoded: Decoded.Int,
+    pc: [*]Inst,
+    i: [*]u8,
+) void;
 
 pub const Decoded = union {
     xy: [2]u4,
